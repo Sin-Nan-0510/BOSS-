@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artale 報名填寫</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        button, input, textarea, select { font-family: inherit; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .drag-item { cursor: grab; }
+        .drag-item:active { cursor: grabbing; }
+        .sortable-ghost {
+            opacity: 0.3;
+            background-color: #3b82f6 !important;
+            border: 2px dashed #60a5fa !important;
+        }
+        .sortable-drag {
+            cursor: grabbing !important;
+            opacity: 0.9;
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen p-4 md:p-8">
+    <div class="mx-auto max-w-7xl">
+        <header class="mb-6 text-center">
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">
+                Artale 成員報名填寫
+            </h1>
+            <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
+        </header>
+
+        <!-- 週別切換區塊 -->
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/90 p-4 shadow-md">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-bold text-slate-300">📅 切換週別：</span>
+                <button onclick="switchWeekRelative(-1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">◀ 上一週</button>
+                <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none">
+                </select>
+                <button onclick="switchWeekRelative(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">下一週 ▶</button>
+                <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
+            </div>
+            <div class="text-xs text-slate-400">
+                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間與隊伍分配</span>按週獨立。
+            </div>
+        </div>
+
+        <main class="space-y-6">
+            <div id="master-view-container"></div>
+        </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCbD0DlTCKkDzjkyADmovtjSe6j6blClZI",
+            authDomain: "boss-3a974.firebaseapp.com",
+            databaseURL: "https://boss-3a974-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "boss-3a974",
+            storageBucket: "boss-3a974.firebasestorage.app",
+            messagingSenderId: "603044171845",
+            appId: "1:603044171845:web:555b0aacbf90b8699b532c"
+        };
+
+        const FIREBASE_PATH = "artale_party_state_v3";
+        const STORAGE_KEY = "artale_party_local_v3";
+        const MAX_GROUPS = 7;
+        const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
+
+        let database = null;
+        let firebaseEnabled = false;
+        let sortableInstance = null;
+
+        let state = {
+            activeWeek: formatDateKey(getTuesdayOfWeek()),
+            pool: [],
+            weeksData: {}
+        };
+
+        function getTuesdayOfWeek(d = new Date()) {
+            const date = new Date(d);
+            const day = date.getDay();
+            let diffToTuesday = (day >= 2) ? (2 - day) : (2 - day - 7);
+            date.setDate(date.getDate() + diffToTuesday);
+            date.setHours(0, 0, 0, 0);
+            return date;
+        }
+
+        function formatDateKey(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getWeekDisplayTitle(weekKey) {
+            if (!weekKey) return "";
+            const parts = weekKey.split('-').map(Number);
+            if (parts.length < 3) return weekKey;
+            const start = new Date(parts[0], parts[1] - 1, parts[2]);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            
+            const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+            const year = start.getFullYear();
+            
+            const startM = String(start.getMonth() + 1).padStart(2, '0');
+            const startD = String(start.getDate()).padStart(2, '0');
+            const startW = weekdays[start.getDay()];
+
+            const endM = end.getMonth() + 1;
+            const endD = String(end.getDate()).padStart(2, '0');
+            const endW = weekdays[end.getDay()];
+
+            const startStr = `${year} ${startM}/${startD}(${startW})`;
+            const endStr = `${endM}/${endD}(${endW})`;
+            
+            const thisTuesdayKey = formatDateKey(getTuesdayOfWeek());
+            let tag = "";
+            if (weekKey === thisTuesdayKey) {
+                tag = " (本週)";
+            } else {
+                const nextTuesday = getTuesdayOfWeek();
+                nextTuesday.setDate(nextTuesday.getDate() + 7);
+                if (weekKey === formatDateKey(nextTuesday)) {
+                    tag = " (下週)";
+                } else {
+                    const lastTuesday = getTuesdayOfWeek();
+                    lastTuesday.setDate(lastTuesday.getDate() - 7);
+                    if (weekKey === formatDateKey(lastTuesday)) {
+                        tag = " (上週)";
+                    }
+                }
+            }
+            return `${startStr} ~${endStr}${tag}`;
+        }
+
+        function makeId() {
+            return Date.now() + "-" + Math.random().toString(36).substring(2, 10);
+        }
+
+        function createDefaultWeekGroups(weekKey) {
+            const parts = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
+            const startDate = (parts.length === 3) ? new Date(parts[0], parts[1] - 1, parts[2]) : getTuesdayOfWeek();
+
+            return Array.from({ length: MAX_GROUPS }, (_, i) => {
+                const targetDate = new Date(startDate);
+                targetDate.setDate(startDate.getDate() + i);
+                const dateStr = `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
+                return {
+                    team1: [], team2: [], team3: [],
+                    time1: "20:00", time2: "20:00", time3: "20:00",
+                    date: dateStr
+                };
+            });
+        }
+
+        function createEmptyFirebaseData() {
+            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
+            return {
+                activeWeek: defaultWeekKey,
+                pool: [],
+                weeksData: {
+                    [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey) }
+                }
+            };
+        }
+
+        function setSyncStatus(text, className = "text-[11px] text-slate-500") {
+            const el = document.getElementById("sync-status");
+            if (!el) return;
+            el.className = `mt-1 ${className}`;
+            el.textContent = text;
+        }
+
+        try {
+            if (typeof firebase !== "undefined" && !firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            database = firebase.database();
+            firebaseEnabled = true;
+        } catch (error) {
+            console.error("Firebase 初始化失敗：", error);
+            firebaseEnabled = false;
+            setSyncStatus("⚠ Firebase 初始化失敗，使用本機儲存", "text-[11px] text-rose-400");
+        }
+
+        if (firebaseEnabled) {
+            database.ref(".info/connected").on("value", snapshot => {
+                if (snapshot.val() === true) {
+                    setSyncStatus("☁ 已連線到 Firebase", "text-[11px] text-emerald-400");
+                } else {
+                    setSyncStatus("☁ Firebase 連線中...", "text-[11px] text-amber-400");
+                }
+            });
+        }
+
+        function isLevel(value) {
+            return /^(?:lv\.?\s*)?\d+$/i.test(String(value || "").trim());
+        }
+
+        function normalizeLevel(value) {
+            const text = String(value || "").trim();
+            const match = text.match(/\d+/);
+            return match ? match[0] : "";
+        }
+
+        function getPlayerLevel(player) {
+            if (!player) return "";
+            const possibleFields = [
+                player.level, player.lv, player["等級"],
+                player.levelText, player.levelDisplay,
+                player.levelNumber, player.levelValue, player["等級數字"]
+            ];
+            for (const value of possibleFields) {
+                if (isLevel(value)) {
+                    const level = normalizeLevel(value);
+                    if (level) return level;
+                }
+            }
+            return "";
+        }
+
+        function normalizeAvailabilityArray(arr) {
+            const defaultArr = ["", "", "", "", "", "", ""];
+            if (!Array.isArray(arr)) return defaultArr;
+            return defaultArr.map((_, i) => typeof arr[i] === "string" ? arr[i] : "");
+        }
+
+        function normalizePlayerAvailability(availObjOrArr, activeWeekKey) {
+            if (Array.isArray(availObjOrArr)) {
+                return { [activeWeekKey]: normalizeAvailabilityArray(availObjOrArr) };
+            }
+            if (availObjOrArr && typeof availObjOrArr === "object") {
+                const res = {};
+                for (const wk in availObjOrArr) {
+                    res[wk] = normalizeAvailabilityArray(availObjOrArr[wk]);
+                }
+                return res;
+            }
+            return { [activeWeekKey]: ["", "", "", "", "", "", ""] };
+        }
+
+        function getPlayerWeekAvailability(player, weekKey) {
+            if (!player || !player.availability) return ["", "", "", "", "", "", ""];
+            if (Array.isArray(player.availability)) {
+                return normalizeAvailabilityArray(player.availability);
+            }
+            if (typeof player.availability === "object") {
+                return normalizeAvailabilityArray(player.availability[weekKey]);
+            }
+            return ["", "", "", "", "", "", ""];
+        }
+
+        function normalizePlayer(player, activeWeekKey) {
+            if (!player || typeof player !== "object") return null;
+            const currentWeekKey = activeWeekKey || formatDateKey(getTuesdayOfWeek());
+            
+            const result = {
+                id: String(player.id || makeId()),
+                level: getPlayerLevel(player),
+                name: String(player.name || player["名稱"] || player["名字"] || "").trim(),
+                job: String(player.job || player["職業"] || "").trim(),
+                position: String(player.position || player["AD/AP"] || player["位置"] || "").trim(),
+                availability: normalizePlayerAvailability(player.availability, currentWeekKey),
+                note: String(player.note || player["備註"] || "").trim()
+            };
+
+            if (!player.position && !player["AD/AP"] && !player["位置"] && result.job) {
+                const match = result.job.match(/^(.*?)\s*\((.*?)\)\s*$/);
+                if (match) {
+                    result.job = match[1].trim();
+                    result.position = match[2].trim();
+                }
+            }
+            return result;
+        }
+
+        function normalizeFirebaseData(data) {
+            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
+            if (!data || typeof data !== "object") return createEmptyFirebaseData();
+
+            let activeWeek = typeof data.activeWeek === "string" && data.activeWeek ? data.activeWeek : defaultWeekKey;
+            let weeksData = data.weeksData || {};
+
+            const pool = Array.isArray(data.pool)
+                ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean)
+                : [];
+
+            return { activeWeek, weeksData, pool };
+        }
+
+        function applyFirebaseDataToLocal(data) {
+            const normalized = normalizeFirebaseData(data);
+            state = {
+                activeWeek: normalized.activeWeek,
+                pool: normalized.pool,
+                weeksData: normalized.weeksData
+            };
+        }
+
+        async function transactionUpdate(mutator) {
+            if (!firebaseEnabled) {
+                const localData = normalizeFirebaseData({
+                    activeWeek: state.activeWeek,
+                    pool: state.pool,
+                    weeksData: state.weeksData
+                });
+                const changed = mutator(localData);
+                if (changed !== false) {
+                    applyFirebaseDataToLocal(localData);
+                    render();
+                }
+                return;
+            }
+
+            try {
+                const ref = database.ref(FIREBASE_PATH);
+                await ref.transaction(currentData => {
+                    if (currentData === null) {
+                        const fresh = createEmptyFirebaseData();
+                        const changed = mutator(fresh);
+                        return changed === false ? null : fresh;
+                    }
+                    const latest = normalizeFirebaseData(currentData);
+                    const changed = mutator(latest);
+                    return changed === false ? currentData : latest;
+                });
+            } catch (error) {
+                console.error("Firebase transaction 失敗：", error);
+                alert("資料同步失敗，請確認網路與連線。");
+            }
+        }
+
+        function initFirebaseListener() {
+            if (!firebaseEnabled) return;
+
+            database.ref(FIREBASE_PATH).on("value", snapshot => {
+                applyFirebaseDataToLocal(snapshot.val());
+                render();
+            }, error => {
+                console.error("Firebase 讀取失敗：", error);
+                setSyncStatus("⚠ Firebase 讀取失敗", "text-[11px] text-rose-400");
+            });
+        }
+
+        function getAvailableWeekKeys() {
+            const keysSet = new Set(Object.keys(state.weeksData || {}));
+            const baseTue = getTuesdayOfWeek();
+            for (let offset = -1; offset <= 2; offset++) {
+                const d = new Date(baseTue);
+                d.setDate(d.getDate() + offset * 7);
+                keysSet.add(formatDateKey(d));
+            }
+            return Array.from(keysSet).sort();
+        }
+
+        function selectWeek(weekKey) {
+            if (!weekKey) return;
+            transactionUpdate(data => {
+                data.activeWeek = weekKey;
+                return true;
+            });
+        }
+
+        function switchWeekRelative(delta) {
+            const parts = state.activeWeek.split('-').map(Number);
+            const currTue = (parts.length === 3) ? new Date(parts[0], parts[1] - 1, parts[2]) : getTuesdayOfWeek();
+            currTue.setDate(currTue.getDate() + delta * 7);
+            selectWeek(formatDateKey(currTue));
+        }
+
+        function jumpToCurrentWeek() {
+            selectWeek(formatDateKey(getTuesdayOfWeek()));
+        }
+
+        function updatePlayerField(playerId, field, value) {
+            const normalizedValue = field === "level" ? normalizeLevel(value) : String(value || "");
+
+            transactionUpdate(data => {
+                const poolPlayer = data.pool.find(p => String(p.id) === String(playerId));
+                if (poolPlayer) {
+                    poolPlayer[field] = normalizedValue;
+                }
+                if (data.weeksData) {
+                    for (const wk in data.weeksData) {
+                        const wData = data.weeksData[wk];
+                        if (wData && wData.groups) {
+                            wData.groups.forEach(group => {
+                                ["team1", "team2", "team3"].forEach(teamKey => {
+                                    if (group[teamKey]) {
+                                        group[teamKey].forEach(teamPlayer => {
+                                            if (String(teamPlayer.id) === String(playerId)) {
+                                                teamPlayer[field] = normalizedValue;
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+                        }
+                    }
+                }
+                return true;
+            });
+        }
+
+        function updatePlayerAvailability(playerId, dayIndex, value) {
+            const currentWeekKey = state.activeWeek;
+            transactionUpdate(data => {
+                const updateTarget = (p) => {
+                    if (!p.availability) p.availability = {};
+                    if (Array.isArray(p.availability)) {
+                        p.availability = { [currentWeekKey]: [...p.availability] };
+                    }
+                    if (!p.availability[currentWeekKey]) {
+                        p.availability[currentWeekKey] = ["", "", "", "", "", "", ""];
+                    }
+                    p.availability[currentWeekKey][dayIndex] = String(value || "");
+                };
+
+                const poolPlayer = data.pool.find(p => String(p.id) === String(playerId));
+                if (poolPlayer) updateTarget(poolPlayer);
+
+                if (data.weeksData) {
+                    for (const wk in data.weeksData) {
+                        const wData = data.weeksData[wk];
+                        if (wData && wData.groups) {
+                            wData.groups.forEach(group => {
+                                ["team1", "team2", "team3"].forEach(teamKey => {
+                                    if (group[teamKey]) {
+                                        group[teamKey].forEach(teamPlayer => {
+                                            if (String(teamPlayer.id) === String(playerId)) {
+                                                updateTarget(teamPlayer);
+                                            }
+                                        });
+                                    }
+                                });
+                            });
+                        }
+                    }
+                }
+                return true;
+            });
+        }
+
+        function addEmptyPoolPlayer() {
+            const currentWeekKey = state.activeWeek;
+            const newPlayer = {
+                id: makeId(),
+                level: "",
+                name: "",
+                job: "",
+                position: "",
+                availability: { [currentWeekKey]: ["", "", "", "", "", "", ""] },
+                note: ""
+            };
+
+            transactionUpdate(data => {
+                data.pool.push(newPlayer);
+                return true;
+            });
+        }
+
+        function deletePoolPlayer(playerId) {
+            const player = state.pool.find(p => String(p.id) === String(playerId));
+            if (!player) return;
+            const name = player.name || "未命名玩家";
+            if (!confirm(`確定要刪除「${name}」嗎？`)) return;
+
+            transactionUpdate(data => {
+                data.pool = data.pool.filter(item => String(item.id) !== String(playerId));
+                if (data.weeksData) {
+                    for (const wk in data.weeksData) {
+                        const wData = data.weeksData[wk];
+                        if (wData && wData.groups) {
+                            wData.groups.forEach(g => {
+                                if (g.team1) g.team1 = g.team1.filter(item => String(item.id) !== String(playerId));
+                                if (g.team2) g.team2 = g.team2.filter(item => String(item.id) !== String(playerId));
+                                if (g.team3) g.team3 = g.team3.filter(item => String(item.id) !== String(playerId));
+                            });
+                        }
+                    }
+                }
+                return true;
+            });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function renderAvailabilitySelects(player) {
+            const availArr = getPlayerWeekAvailability(player, state.activeWeek);
+            return WEEKDAYS.map((day, i) => {
+                const val = availArr[i] || "";
+                return `
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
+                        <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none">
+                            <option value="" ${val === "" ? "selected" : ""}></option>
+                            <option value="20:00~" ${val === "20:00~" ? "selected" : ""}>20:00~</option>
+                            <option value="21:00~" ${val === "21:00~" ? "selected" : ""}>21:00~</option>
+                        </select>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function renderPool() {
+            let html = `
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                        <h2 class="flex items-center gap-2 text-lg font-bold text-slate-200"><span>👥</span>總名單成員</h2>
+                        <div class="flex items-center gap-2">
+                            <button onclick="addEmptyPoolPlayer()" class="rounded-lg border border-blue-600/50 bg-blue-600/20 px-2.5 py-1 text-xs font-semibold text-blue-300 hover:bg-blue-600/40 transition">➕ 新增成員</button>
+                            <span class="rounded-full bg-blue-950 px-2.5 py-1 text-xs font-semibold text-blue-400">${state.pool.length} 人</span>
+                        </div>
+                    </div>
+                    <div id="pool-list" class="sortable-list flex min-h-[100px] flex-col gap-2">
+            `;
+
+            if (state.pool.length === 0) {
+                html += `<p class="empty-msg py-6 text-center text-sm text-slate-500">目前總名單為空，請點擊上方按鈕新增成員。</p>`;
+            } else {
+                state.pool.forEach((player, index) => {
+                    const level = getPlayerLevel(player);
+                    html += `
+                        <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm transition hover:border-slate-700">
+                            <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                                <span class="text-xs font-semibold text-slate-500 select-none">#${index + 1}</span>
+                                <div class="flex items-center">
+                                    <span class="text-xs text-slate-500 select-none">Lv.</span>
+                                    <input type="text" value="${escapeHtml(level)}" placeholder="-" maxlength="3" inputmode="numeric" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs font-semibold text-blue-400 focus:border-blue-500 focus:outline-none" title="點擊修改等級">
+                                </div>
+                                <input type="text" value="${escapeHtml(player.job)}" placeholder="職業" onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400 focus:border-blue-500 focus:outline-none" title="點擊修改職業">
+                                <input type="text" value="${escapeHtml(player.name)}" placeholder="名字" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs font-bold text-slate-200 focus:border-blue-500 focus:outline-none" title="點擊修改名字">
+                                <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300 focus:border-blue-500 focus:outline-none" title="點擊修改 AD/AP">
+                                
+                                <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800/80">
+                                    ${renderAvailabilitySelects(player)}
+                                </div>
+
+                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400 focus:border-blue-500 focus:outline-none" title="點擊修改備註">
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0 ml-2">
+                                <button onclick="deletePoolPlayer('${player.id}')" title="刪除此成員" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950 transition">✕</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `</div></div>`;
+            return html;
+        }
+
+        function initSortable() {
+            if (sortableInstance) sortableInstance.destroy();
+            const el = document.getElementById("pool-list");
+            if (!el) return;
+
+            sortableInstance = new Sortable(el, {
+                draggable: ".drag-item",
+                animation: 150,
+                filter: "input, button, select",
+                preventOnFilter: false,
+                ghostClass: "sortable-ghost",
+                dragClass: "sortable-drag",
+                onEnd: function(evt) {
+                    if (evt.oldIndex === evt.newIndex) return;
+                    transactionUpdate(data => {
+                        const [moved] = data.pool.splice(evt.oldIndex, 1);
+                        data.pool.splice(evt.newIndex, 0, moved);
+                        return true;
+                    });
+                }
+            });
+        }
+
+        function render() {
+            const weekSelect = document.getElementById("week-select");
+            if (weekSelect) {
+                const weekKeys = getAvailableWeekKeys();
+                weekSelect.innerHTML = weekKeys.map(wk => {
+                    const title = getWeekDisplayTitle(wk);
+                    return `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${title}</option>`;
+                }).join("");
+            }
+
+            document.getElementById("master-view-container").innerHTML = renderPool();
+            initSortable();
+        }
+
+        initFirebaseListener();
+    </script>
+</body>
+</html>
