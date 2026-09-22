@@ -37,7 +37,8 @@
 </head>
 
 <body class="min-h-screen p-4 md:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-7xl">
+        <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
             <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">
                 Artale 總名單填寫
@@ -50,25 +51,29 @@
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-bold text-slate-300">📅 切換週別：</span>
                 <button onclick="switchWeekRelative(-1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">◀ 上一週</button>
-                <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none">
-                </select>
+                <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none"></select>
                 <button onclick="switchWeekRelative(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">下一週 ▶</button>
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
             </div>
             <div class="text-xs text-slate-400">
-                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間</span>按週獨立。
+                💡 請填寫您的<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP與每週各天可參與狀況</span>。
             </div>
         </div>
 
+        <!-- 主內容區：僅保留總名單 -->
         <main class="space-y-6">
-            <div id="master-view-container"></div>
+            <div class="space-y-6">
+                <div id="master-view-container"></div>
+            </div>
         </main>
     </div>
 
+    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 
     <script>
+        // ==================== 1. 基礎設定與常數 ====================
         const firebaseConfig = {
             apiKey: "AIzaSyCbD0DlTCKkDzjkyADmovtjSe6j6blClZI",
             authDomain: "boss-3a974.firebaseapp.com",
@@ -81,9 +86,11 @@
 
         const FIREBASE_PATH = "artale_party_state_v3";
         const STORAGE_KEY = "artale_party_local_v3";
+        const MAX_GROUPS = 7;
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const JOB_LIST = ["黑騎士", "聖騎士", "英雄", "火毒", "冰雷", "主教", "箭神", "神射手", "夜使者", "暗影神偷", "槍神", "拳霸"];
 
+        // ==================== 2. 全域狀態變數 ====================
         let database = null;
         let firebaseEnabled = false;
         let sortableInstances = [];
@@ -99,6 +106,7 @@
             weeksData: {}
         };
 
+        // ==================== 3. 排序與樣式輔助函式 ====================
         function sortPoolBy(field) {
             if (poolSortState.field === field) {
                 poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
@@ -216,6 +224,7 @@
             return html;
         }
 
+        // ==================== 4. 日期與週別處理函式 ====================
         function getTuesdayOfWeek(d = new Date()) {
             const date = new Date(d);
             const day = date.getDay();
@@ -278,12 +287,30 @@
             return Date.now() + "-" + Math.random().toString(36).substring(2, 10);
         }
 
+        function createDefaultWeekGroups(weekKey) {
+            const parts = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
+            const startDate = (parts.length === 3) ? new Date(parts[0], parts[1] - 1, parts[2]) : getTuesdayOfWeek();
+
+            return Array.from({ length: MAX_GROUPS }, (_, i) => {
+                const targetDate = new Date(startDate);
+                targetDate.setDate(startDate.getDate() + i);
+                const dateStr = `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
+                return {
+                    team1: [], team2: [], team3: [],
+                    time1: "20:00", time2: "20:00", time3: "20:00",
+                    date: dateStr
+                };
+            });
+        }
+
         function createEmptyFirebaseData() {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
             return {
                 activeWeek: defaultWeekKey,
                 pool: [],
-                weeksData: {}
+                weeksData: {
+                    [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey) }
+                }
             };
         }
 
@@ -294,6 +321,7 @@
             el.textContent = text;
         }
 
+        // ==================== 5. Firebase 初始化與連線設定 ====================
         try {
             if (typeof firebase !== "undefined" && !firebase.apps.length) {
                 firebase.initializeApp(firebaseConfig);
@@ -316,6 +344,7 @@
             });
         }
 
+        // ==================== 6. 資料正規化與狀態管理 ====================
         function isLevel(value) {
             return /^(?:lv\.?\s*)?\d+$/i.test(String(value || "").trim());
         }
@@ -387,6 +416,7 @@
                 name: String(player.name || player["名稱"] || player["名字"] || "").trim(),
                 job: String(player.job || player["職業"] || "").trim(),
                 position: String(player.position || player["AD/AP"] || player["位置"] || "").trim(),
+                rounds: String(player.rounds || "7").trim(),
                 groupId: String(player.groupId || "").trim(),
                 availability: normalizePlayerAvailability(player.availability, currentWeekKey),
                 note: String(player.note || player["備註"] || "").trim()
@@ -402,6 +432,33 @@
             return result;
         }
 
+        function normalizeWeekGroupData(weekData, weekKey) {
+            if (!weekData || typeof weekData !== "object") {
+                return { groups: createDefaultWeekGroups(weekKey) };
+            }
+            let groups = Array.isArray(weekData.groups) ? weekData.groups.slice(0, MAX_GROUPS) : [];
+            const defaultGroups = createDefaultWeekGroups(weekKey);
+
+            while (groups.length < MAX_GROUPS) {
+                groups.push(defaultGroups[groups.length]);
+            }
+
+            groups = groups.map((group, idx) => {
+                if (!group || typeof group !== "object") return defaultGroups[idx];
+                return {
+                    team1: Array.isArray(group.team1) ? group.team1.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
+                    team2: Array.isArray(group.team2) ? group.team2.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
+                    team3: Array.isArray(group.team3) ? group.team3.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
+                    time1: typeof group.time1 === "string" && group.time1 ? group.time1 : "20:00",
+                    time2: typeof group.time2 === "string" && group.time2 ? group.time2 : "20:00",
+                    time3: typeof group.time3 === "string" && group.time3 ? group.time3 : "20:00",
+                    date: typeof group.date === "string" && group.date ? group.date : defaultGroups[idx].date
+                };
+            });
+
+            return { groups };
+        }
+
         function normalizeFirebaseData(data) {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
 
@@ -410,8 +467,20 @@
             }
 
             let activeWeek = typeof data.activeWeek === "string" && data.activeWeek ? data.activeWeek : defaultWeekKey;
-            let weeksData = data.weeksData && typeof data.weeksData === "object" ? data.weeksData : {};
-            
+
+            let weeksData = {};
+            if (data.weeksData && typeof data.weeksData === "object") {
+                for (const wk in data.weeksData) {
+                    weeksData[wk] = normalizeWeekGroupData(data.weeksData[wk], wk);
+                }
+            } else if (Array.isArray(data.groups)) {
+                weeksData[defaultWeekKey] = normalizeWeekGroupData({ groups: data.groups }, defaultWeekKey);
+            }
+
+            if (!weeksData[activeWeek]) {
+                weeksData[activeWeek] = { groups: createDefaultWeekGroups(activeWeek) };
+            }
+
             const pool = Array.isArray(data.pool)
                 ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean)
                 : [];
@@ -515,6 +584,7 @@
             });
         }
 
+        // ==================== 7. 互動事件處理函式 ====================
         function getAvailableWeekKeys() {
             const keysSet = new Set(Object.keys(state.weeksData || {}));
             const baseTue = getTuesdayOfWeek();
@@ -530,6 +600,10 @@
             if (!weekKey) return;
             transactionUpdate(data => {
                 data.activeWeek = weekKey;
+                if (!data.weeksData) data.weeksData = {};
+                if (!data.weeksData[weekKey]) {
+                    data.weeksData[weekKey] = { groups: createDefaultWeekGroups(weekKey) };
+                }
                 return true;
             });
         }
@@ -587,6 +661,7 @@
                 name: "",
                 job: "",
                 position: "",
+                rounds: "7",
                 groupId: "",
                 availability: {
                     [currentWeekKey]: ["", "", "", "", "", "", ""]
@@ -612,6 +687,7 @@
             });
         }
 
+        // ==================== 8. UI 渲染函式 ====================
         function escapeHtml(value) {
             return String(value ?? "")
                 .replaceAll("&", "&amp;")
@@ -640,7 +716,6 @@
 
         function renderPool() {
             const displayPool = state.pool;
-            const titleText = "總名單成員（可自由填寫與拖動排序）";
 
             const getSortIcon = (field) => {
                 if (poolSortState.field !== field) return '↕️';
@@ -651,7 +726,7 @@
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
                     <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                         <div class="flex items-center gap-3 flex-wrap">
-                            <h2 class="flex items-center gap-2 text-lg font-bold text-slate-200"><span>👥</span>${titleText}</h2>
+                            <h2 class="flex items-center gap-2 text-lg font-bold text-slate-200"><span>👥</span>總名單成員填寫</h2>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
                             <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs">
@@ -679,6 +754,7 @@
                 displayPool.forEach((player, index) => {
                     const level = getPlayerLevel(player);
                     const jobColorClass = getJobColorClass(player.job);
+                    const roundsVal = player.rounds || "7";
                     
                     html += `
                         <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm transition hover:border-slate-700">
@@ -698,7 +774,12 @@
                                     ${renderAvailabilitySelects(player)}
                                 </div>
 
-                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-20 rounded border border-amber-900/80 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300 focus:border-amber-500 focus:outline-none" title="選擇同綁定編號者將會一起拖拉">
+                                <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" title="選擇場次">
+                                    <option value="7" ${roundsVal === "7" ? "selected" : ""}>7場</option>
+                                    <option value="14" ${roundsVal === "14" ? "selected" : ""}>14場</option>
+                                </select>
+
+                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-20 rounded border border-amber-900/80 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300 focus:border-amber-500 focus:outline-none" title="選擇同綁定編號者將會一起排序">
                                     ${renderGroupSelectOptions(player.groupId)}
                                 </select>
 
@@ -716,13 +797,14 @@
             return html;
         }
 
+        // ==================== 9. SortableJS 拖曳互動設定 ====================
         function initSortables() {
             sortableInstances.forEach(instance => instance.destroy());
             sortableInstances = [];
 
             document.querySelectorAll(".sortable-list").forEach(el => {
                 const instance = new Sortable(el, {
-                    group: "artale-pool-list",
+                    group: "artale-master-list",
                     draggable: ".drag-item",
                     animation: 150,
                     filter: "input, button, select",
@@ -764,6 +846,7 @@
             });
         }
 
+        // ==================== 10. 主畫面渲染與初始化入口 ====================
         function render() {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
             state = state || {
@@ -785,6 +868,7 @@
             initSortables();
         }
 
+        // 啟動程式
         initFirebaseListener();
     </script>
 </body>
