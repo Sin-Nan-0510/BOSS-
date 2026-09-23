@@ -217,9 +217,9 @@
 
         function renderGroupSelectOptions(currentGroupId) {
             let html = `<option value="" class="bg-slate-900 text-slate-500" ${!currentGroupId ? "selected" : ""}></option>`;
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 15; i++) {
                 const gid = `g${i}`;
-                html += `<option value="${gid}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === gid ? "selected" : ""}>本/分號 ${i}</option>`;
+                html += `<option value="${gid}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === gid ? "selected" : ""}>大小號 ${i}</option>`;
             }
             return html;
         }
