@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artale 遠征團名單 (填寫)</title>
+    <title>Artale 隊伍分配</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
     <style>
         * { box-sizing: border-box; }
@@ -18,14 +20,111 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .drag-item { cursor: grab; }
+        .drag-item:active { cursor: grabbing; }
+        .sortable-ghost {
+            opacity: 0.3;
+            background-color: #3b82f6 !important;
+            border: 2px dashed #60a5fa !important;
+        }
+        .sortable-drag {
+            cursor: grabbing !important;
+            opacity: 0.9;
+            transform: scale(1.02);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        
+        #share-card {
+            position: fixed;
+            left: -100000px;
+            top: 0;
+            width: max-content;
+            pointer-events: none;
+        }
+        .share-card-inner {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            padding: 28px;
+            background: #111111;
+            color: #d1d5db;
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+        .share-group-column {
+            width: 330px;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            padding: 14px 16px;
+            flex-shrink: 0;
+        }
+        .share-group-header-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f3f4f6;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 5px;
+        }
+        .share-team-title-text {
+            font-size: 17px;
+            font-weight: 700;
+            color: #93c5fd;
+            margin-top: 8px;
+            margin-bottom: 3px;
+            line-height: 21px;
+        }
+        .share-row-item {
+            display: flex;
+            align-items: center;
+            min-height: 28px;
+            height: 28px;
+            padding: 0;
+            line-height: 20px;
+            font-size: 15px;
+            color: #e5e7eb;
+            margin-bottom: 1px;
+            overflow: visible;
+        }
+        .share-col-level {
+            width: 48px;
+            text-align: right;
+            margin-right: 6px;
+            color: #93c5fd;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .share-col-job {
+            width: 72px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+        .share-col-name {
+            width: 110px;
+            margin-right: 6px;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: nowrap;
+            line-height: 20px;
+            min-height: 20px;
+            flex-shrink: 0;
+        }
+        .share-col-part {
+            width: 50px;
+            color: #c084fc;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 
 <body class="min-h-screen p-4 md:p-8">
-    <div class="mx-auto max-w-6xl">
+    <div class="mx-auto max-w-7xl">
         <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
-            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 遠征團名單</h1>
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 隊伍分配</h1>
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
@@ -37,16 +136,88 @@
                 <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none"></select>
                 <button onclick="switchWeekRelative(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">下一週 ▶</button>
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
+                <button id="btn-delete-week" onclick="deleteCurrentWeek()" class="rounded-lg border border-rose-900 bg-rose-950/80 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900 transition">🗑️ 刪除此週</button>
             </div>
             <div class="text-xs text-slate-400">
-                💡 請填寫您的基本資料與本週可配合時間。
+                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間與隊伍分配</span>按週獨立。
             </div>
         </div>
 
-        <!-- 主內容區：總名單表格/列表 -->
+        <!-- 分頁切換區塊 -->
+        <div class="mb-6 grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-md">
+            <button id="tab-btn-master" onclick="switchTab('master')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
+                <span>📋</span> 總名單 <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
+            </button>
+            <button id="tab-btn-teams" onclick="switchTab('teams')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
+                <span>⚔️</span> 隊伍分配 <span id="teams-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0/18</span>
+            </button>
+        </div>
+
+        <!-- 主內容區 -->
         <main class="space-y-6">
-            <div id="master-view-container"></div>
+            <!-- 總名單頁面 -->
+            <div id="tab-content-master" class="space-y-6 hidden">
+                <div id="master-view-container"></div>
+            </div>
+
+            <!-- 隊伍分配頁面 -->
+            <div id="tab-content-teams" class="space-y-6 hidden">
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-base font-bold text-slate-200">遠征團管理</h2>
+                    </div>
+                    <div id="group-tabs" class="mt-4 flex flex-wrap gap-3"></div>
+                </div>
+
+                <!-- 隊伍管理操作列 -->
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-sm">
+                    <div class="text-xs text-slate-400">
+                        📌 當前遠征團共有 <span id="current-teams-count" class="text-blue-400 font-bold">3</span> 支隊伍
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="addTeamToCurrentGroup()" class="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition">➕ 新增隊伍</button>
+                        <button onclick="removeTeamFromCurrentGroup()" class="rounded-lg border border-rose-900 bg-rose-950/60 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-900 transition">➖ 減少最後一隊</button>
+                    </div>
+                </div>
+
+                <div id="teams-cards-container" class="space-y-6"></div>
+                <div id="teams-pool-container"></div>
+
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <button onclick="generateAllTeamsImage()" class="rounded-lg border border-blue-900 bg-blue-950/50 px-4 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-900/50">🖼️ 產生全部團隊圖片</button>
+                        <button onclick="clearCurrentGroup()" class="rounded-lg border border-slate-800 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-700">🧹 清空當前團隊伍</button>
+                    </div>
+                </div>
+            </div>
         </main>
+    </div>
+
+    <!-- 圖片匯出暫存容器 -->
+    <div id="share-card"></div>
+
+    <!-- 圖片預覽 Modal -->
+    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 id="modal-title" class="text-lg font-bold text-slate-100">團隊圖片預覽</h3>
+                <button onclick="closeModal()" class="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
+            </div>
+            <div class="relative flex flex-1 items-center justify-center overflow-auto rounded-lg bg-slate-950 p-2">
+                <img id="modal-img" class="max-h-[65vh] rounded object-contain shadow-lg" src="" alt="團隊圖片預覽">
+            </div>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
+                <div class="flex items-center gap-2">
+                    <button id="btn-prev" onclick="changeImage(-1)" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40">◀ 上一頁</button>
+                    <span id="modal-page-info" class="text-xs font-semibold text-slate-400">1 / 1</span>
+                    <button id="btn-next" onclick="changeImage(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-40">下一頁 ▶</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-copy-img" onclick="copyModalImage()" class="rounded-lg border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-600/40 transition-colors">📋 複製圖片</button>
+                    <button onclick="downloadModalImage()" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500">💾 下載圖片</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -54,6 +225,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 
     <script>
+        // ==========================================
+        // 1. 常數與設定值 (Constants & Config)
+        // ==========================================
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCbD0DlTCKkDzjkyADmovtjSe6j6blClZI",
             authDomain: "boss-3a974.firebaseapp.com",
@@ -65,9 +239,11 @@
         };
 
         const FIREBASE_PATH = "artale_party_state_v3";
-        const STORAGE_KEY = "artale_party_local_master_v3";
+        const STORAGE_KEY = "artale_party_local_v3";
         const MAX_GROUPS = 7;
+        const GROUP_NAMES = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
+        const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
         const JOB_LIST = ["黑騎士", "聖騎士", "英雄", "火毒", "冰雷", "主教", "箭神", "神射手", "夜使者", "暗影神偷", "槍神", "拳霸"];
 
         const JOB_STYLE_MAP = {
@@ -88,24 +264,49 @@
         const DEFAULT_JOB_CLASS = "bg-slate-900 border-slate-800 text-slate-400";
         const DEFAULT_JOB_STYLE = "background-color: #0f172a; color: #94a3b8;";
 
+        // ==========================================
+        // 2. 全域狀態變數 (Global State)
+        // ==========================================
         let database = null;
         let firebaseEnabled = false;
+        let sortableInstances = [];
+        let currentTab = "teams";
+        let previewImages = [];
+        let currentImageIndex = 0;
         let poolSortState = { field: null, direction: 'desc' };
 
         let state = {
             activeWeek: formatDateKey(getTuesdayOfWeek()),
+            activeGroup: 0,
+            filterAvailableOnly: true,
             pool: [],
             weeksData: {}
         };
 
-        function makeId() { return Date.now() + "-" + Math.random().toString(36).substring(2, 10); }
-
-        function escapeHtml(str) {
-            return String(str ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+        // ==========================================
+        // 3. 通用工具與日期輔助函式 (Helper Utilities)
+        // ==========================================
+        function makeId() { 
+            return Date.now() + "-" + Math.random().toString(36).substring(2, 10); 
         }
 
-        function isLevel(val) { return /^(?:lv\.?\s*)?\d+$/i.test(String(val || "").trim()); }
-        function normalizeLevel(val) { const match = String(val || "").trim().match(/\d+/); return match ? match[0] : ""; }
+        function escapeHtml(str) {
+            return String(str ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function isLevel(val) { 
+            return /^(?:lv\.?\s*)?\d+$/i.test(String(val || "").trim()); 
+        }
+
+        function normalizeLevel(val) { 
+            const match = String(val || "").trim().match(/\d+/); 
+            return match ? match[0] : ""; 
+        }
 
         function getPlayerLevel(player) {
             if (!player) return "";
@@ -131,20 +332,75 @@
             if (!weekKey) return "";
             const [y, m, d] = weekKey.split('-').map(Number);
             if (!y) return weekKey;
+            
             const start = new Date(y, m - 1, d);
             const end = new Date(start);
             end.setDate(start.getDate() + 6);
+            
             const rangeStr = `${start.getFullYear()} ${String(start.getMonth() + 1).padStart(2, '0')}/${String(start.getDate()).padStart(2, '0')} ~ ${end.getMonth() + 1}/${String(end.getDate()).padStart(2, '0')}`;
             const thisKey = formatDateKey(getTuesdayOfWeek());
+            
             if (weekKey === thisKey) return `${rangeStr} (本週)`;
+            
+            const nextTue = getTuesdayOfWeek(); 
+            nextTue.setDate(nextTue.getDate() + 7);
+            if (weekKey === formatDateKey(nextTue)) return `${rangeStr} (下週)`;
+            
+            const lastTue = getTuesdayOfWeek(); 
+            lastTue.setDate(lastTue.getDate() - 7);
+            if (weekKey === formatDateKey(lastTue)) return `${rangeStr} (上週)`;
+            
             return rangeStr;
+        }
+
+        function getWeekday(date) {
+            const parts = String(date).split("/");
+            if (parts.length < 2) return "";
+            const d = new Date(new Date().getFullYear(), Number(parts[0]) - 1, Number(parts[1]));
+            return isNaN(d) ? "" : WEEKDAY_NAMES[d.getDay()];
         }
 
         function setSyncStatus(text, className = "text-[11px] text-slate-500") {
             const el = document.getElementById("sync-status");
-            if (el) { el.className = `mt-1 ${className}`; el.textContent = text; }
+            if (el) { 
+                el.className = `mt-1 ${className}`; 
+                el.textContent = text; 
+            }
         }
 
+        // ==========================================
+        // 4. 預設資料結構產生器 (Default Generators)
+        // ==========================================
+        function createDefaultTeams() {
+            return [
+                { name: "第1隊", emoji: "⚔️", time: "20:00", con: false, members: [] },
+                { name: "第2隊", emoji: "⚔️", time: "20:00", con: false, members: [] },
+                { name: "第3隊", emoji: "⚔️", time: "20:00", con: false, members: [] }
+            ];
+        }
+
+        function createDefaultWeekGroups(weekKey) {
+            const [y, m, d] = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
+            const startDate = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
+            return Array.from({ length: MAX_GROUPS }, (_, i) => {
+                const targetDate = new Date(startDate);
+                targetDate.setDate(startDate.getDate() + i);
+                return { teams: createDefaultTeams(), date: `${targetDate.getMonth() + 1}/${targetDate.getDate()}` };
+            });
+        }
+
+        function createEmptyFirebaseData() {
+            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
+            return { 
+                activeWeek: defaultWeekKey, 
+                pool: [], 
+                weeksData: { [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey) } } 
+            };
+        }
+
+        // ==========================================
+        // 5. 資料規格化邏輯 (Normalization)
+        // ==========================================
         function normalizeAvailabilityArray(arr) {
             const def = ["", "", "", "", "", "", ""];
             return Array.isArray(arr) ? def.map((_, i) => typeof arr[i] === "string" ? arr[i] : "") : def;
@@ -172,37 +428,94 @@
             return {
                 id: String(player.id || makeId()),
                 level: getPlayerLevel(player),
-                name: String(player.name || "").trim(),
-                job: String(player.job || "").trim(),
-                position: String(player.position || "").trim(),
+                name: String(player.name || player["名稱"] || player["名字"] || "").trim(),
+                job: String(player.job || player["職業"] || "").trim(),
+                position: String(player.position || player["AD/AP"] || "").trim(),
                 rounds: String(player.rounds || "7").trim(),
                 groupId: String(player.groupId || "").trim(),
+                part: String(player.part || ""),
                 availability: normalizePlayerAvailability(player.availability, wk),
-                note: String(player.note || "").trim()
+                note: String(player.note || player["備註"] || "").trim()
             };
+        }
+
+        function normalizeWeekGroupData(weekData, wk) {
+            let groups = Array.isArray(weekData?.groups) ? weekData.groups.slice(0, MAX_GROUPS) : [];
+            const defGroups = createDefaultWeekGroups(wk);
+            
+            while (groups.length < MAX_GROUPS) {
+                groups.push(defGroups[groups.length]);
+            }
+
+            groups = groups.map((g, idx) => {
+                const teams = Array.isArray(g?.teams) ? g.teams.map((t, tIdx) => ({
+                    name: t.name || `第${tIdx + 1}隊`,
+                    emoji: t.emoji || "⚔️",
+                    time: t.time || "20:00",
+                    con: Boolean(t.con),
+                    members: Array.isArray(t.members) ? t.members.map(p => normalizePlayer(p, wk)).filter(Boolean) : []
+                })) : createDefaultTeams();
+                
+                return { teams, date: typeof g?.date === "string" && g.date ? g.date : defGroups[idx].date };
+            });
+            return { groups };
         }
 
         function normalizeFirebaseData(data) {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
-            if (!data || typeof data !== "object") return { activeWeek: defaultWeekKey, pool: [], weeksData: {} };
+            if (!data || typeof data !== "object") return createEmptyFirebaseData();
+            
             const activeWeek = typeof data.activeWeek === "string" && data.activeWeek ? data.activeWeek : defaultWeekKey;
+            const weeksData = {};
+            
+            if (data.weeksData && typeof data.weeksData === "object") {
+                for (const wk in data.weeksData) {
+                    weeksData[wk] = normalizeWeekGroupData(data.weeksData[wk], wk);
+                }
+            }
+            if (!weeksData[activeWeek]) {
+                weeksData[activeWeek] = { groups: createDefaultWeekGroups(activeWeek) };
+            }
+            
             const pool = Array.isArray(data.pool) ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean) : [];
-            return { activeWeek, pool, weeksData: data.weeksData || {} };
+            return { activeWeek, weeksData, pool };
         }
 
         function applyFirebaseDataToLocal(data) {
             const norm = normalizeFirebaseData(data);
-            state.activeWeek = norm.activeWeek;
-            state.pool = norm.pool;
-            state.weeksData = norm.weeksData;
+            state = {
+                activeWeek: norm.activeWeek,
+                activeGroup: Math.min(Math.max(state.activeGroup || 0, 0), MAX_GROUPS - 1),
+                filterAvailableOnly: typeof state.filterAvailableOnly === "boolean" ? state.filterAvailableOnly : true,
+                pool: norm.pool,
+                weeksData: norm.weeksData
+            };
+        }
+
+        function currentWeekData() { 
+            return state.weeksData[state.activeWeek] || { groups: createDefaultWeekGroups(state.activeWeek) }; 
+        }
+        
+        function currentGroup() { 
+            return currentWeekData().groups[state.activeGroup] || { teams: createDefaultTeams(), date: "" }; 
+        }
+
+        // ==========================================
+        // 6. 資料庫與狀態同步 (Database Sync)
+        // ==========================================
+        function saveLocalState() {
+            try { 
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeWeek: state.activeWeek, pool: state.pool, weeksData: state.weeksData })); 
+            } catch(e) {}
         }
 
         async function transactionUpdate(mutator) {
             if (!firebaseEnabled) {
                 const local = normalizeFirebaseData(state);
-                if (mutator(local) !== false) {
-                    applyFirebaseDataToLocal(local);
-                    render();
+                if (mutator(local) !== false) { 
+                    applyFirebaseDataToLocal(local); 
+                    saveLocalState(); 
+                    render(); 
                 }
                 return;
             }
@@ -212,12 +525,12 @@
                     const latest = normalizeFirebaseData(cur);
                     return mutator(latest) === false ? cur : latest;
                 });
-                if (res?.snapshot) {
-                    applyFirebaseDataToLocal(res.snapshot.val());
-                    render();
+                if (res?.snapshot) { 
+                    applyFirebaseDataToLocal(res.snapshot.val()); 
+                    render(); 
                 }
-            } catch(err) {
-                alert("資料同步失敗");
+            } catch(err) { 
+                alert("資料同步失敗"); 
             }
         }
 
@@ -230,25 +543,193 @@
                 firebaseEnabled = true;
             } catch (error) {
                 firebaseEnabled = false;
-                setSyncStatus("⚠ Firebase 初始化失敗", "text-[11px] text-rose-400");
+                setSyncStatus("⚠ Firebase 初始化失敗，使用本機儲存", "text-[11px] text-rose-400");
             }
 
-            if (!firebaseEnabled) return;
+            if (!firebaseEnabled) { 
+                loadLocalState(); 
+                return; 
+            }
 
             database.ref(".info/connected").on("value", snap => {
                 const isConn = snap.val() === true;
                 setSyncStatus(isConn ? "☁ 已連線到 Firebase" : "☁ Firebase 連線中...", isConn ? "text-[11px] text-emerald-400" : "text-[11px] text-amber-400");
             });
 
-            database.ref(FIREBASE_PATH).on("value", snap => {
-                applyFirebaseDataToLocal(snap.val());
-                render();
+            database.ref(FIREBASE_PATH).on("value", snap => { 
+                applyFirebaseDataToLocal(snap.val()); 
+                render(); 
             });
+            
+            database.ref(FIREBASE_PATH).transaction(cur => cur === null ? createEmptyFirebaseData() : cur);
+        }
+
+        function loadLocalState() {
+            try { 
+                applyFirebaseDataToLocal(JSON.parse(localStorage.getItem(STORAGE_KEY))); 
+            } catch(e) { 
+                applyFirebaseDataToLocal(null); 
+            }
+            render();
+        }
+
+        // ==========================================
+        // 7. 商業邏輯運算 (Business Logic)
+        // ==========================================
+        function getPlayerWeeklyTeamCount(playerId, weekData) {
+            if (!weekData || !weekData.groups) return 0;
+            let count = 0;
+            weekData.groups.forEach(group => {
+                (group.teams || []).forEach(team => {
+                    if (team && team.members && team.members.some(p => String(p.id) === String(playerId))) {
+                        count += team.con ? 2 : 1;
+                    }
+                });
+            });
+            return count;
+        }
+
+        function hasReachedWeeklyLimit(player, weekData) {
+            const rounds = String(player.rounds || "7");
+            const assignedCount = getPlayerWeeklyTeamCount(player.id, weekData);
+            if (rounds === "14" && assignedCount >= 2) return true;
+            if (rounds === "7" && assignedCount >= 1) return true;
+            return false;
+        }
+
+        function sortPoolBy(field) {
+            if (poolSortState.field === field) {
+                poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                poolSortState.field = field;
+                poolSortState.direction = field === 'level' ? 'desc' : 'asc';
+            }
+            const dir = poolSortState.direction === 'asc' ? 1 : -1;
+
+            transactionUpdate(data => {
+                const groupsMap = new Map();
+                data.pool.forEach((player, idx) => {
+                    const gId = player.groupId ? String(player.groupId).trim() : null;
+                    if (gId) {
+                        if (!groupsMap.has(gId)) groupsMap.set(gId, []);
+                        groupsMap.get(gId).push(player);
+                    } else {
+                        groupsMap.set(`_single_${idx}_${player.id}`, [player]);
+                    }
+                });
+
+                const groupList = Array.from(groupsMap.values()).map(members => {
+                    let sortKey;
+                    if (field === 'level') {
+                        const levels = members.map(m => Number(getPlayerLevel(m)) || 0);
+                        sortKey = dir === 1 ? Math.min(...levels) : Math.max(...levels);
+                    } else if (field === 'job') {
+                        const jobs = members.map(m => String(m.job || ''));
+                        jobs.sort((a, b) => a.localeCompare(b, 'zh-TW'));
+                        sortKey = dir === 1 ? jobs[0] : jobs[jobs.length - 1];
+                    }
+                    return { members, sortKey };
+                });
+
+                groupList.sort((a, b) => {
+                    if (field === 'level') return (a.sortKey - b.sortKey) * dir;
+                    if (field === 'job') return String(a.sortKey).localeCompare(String(b.sortKey), 'zh-TW') * dir;
+                    return 0;
+                });
+
+                data.pool = [];
+                groupList.forEach(group => data.pool.push(...group.members));
+                return true;
+            });
+        }
+
+        // ==========================================
+        // 8. 介面事件處理與動作 (UI Event Handlers)
+        // ==========================================
+        function moveEntireTeamToTargetGroup(sTeamIdx, targetGroupIdx) {
+            if (targetGroupIdx === "" || isNaN(targetGroupIdx)) return;
+            const targetGIdx = parseInt(targetGroupIdx, 10);
+            if (targetGIdx === state.activeGroup) {
+                alert("該隊伍已經在當前星期！");
+                return;
+            }
+
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const srcGroup = wData.groups[state.activeGroup];
+                const targetGroup = wData.groups[targetGIdx];
+
+                if (!srcGroup || !srcGroup.teams[sTeamIdx]) return false;
+
+                const movingTeam = srcGroup.teams[sTeamIdx];
+                if (!targetGroup.teams) targetGroup.teams = [];
+
+                const emptyTeamIdx = targetGroup.teams.findIndex(t => !t.members || t.members.length === 0);
+
+                if (emptyTeamIdx !== -1) {
+                    targetGroup.teams[emptyTeamIdx].members = JSON.parse(JSON.stringify(movingTeam.members || []));
+                    targetGroup.teams[emptyTeamIdx].con = Boolean(movingTeam.con);
+                } else {
+                    const newTeam = JSON.parse(JSON.stringify(movingTeam));
+                    newTeam.name = `第${targetGroup.teams.length + 1}隊`;
+                    targetGroup.teams.push(newTeam);
+                }
+
+                srcGroup.teams[sTeamIdx].members = [];
+                srcGroup.teams[sTeamIdx].con = false;
+
+                alert(`成功將【${movingTeam.name}】成員搬移至 ${GROUP_NAMES[targetGIdx]}！`);
+                return true;
+            });
+        }
+
+        function moveTeamToTeam(sTeamIdx, targetTeamIdxStr) {
+            if (targetTeamIdxStr === "") return;
+            const targetTeamIdx = parseInt(targetTeamIdxStr, 10);
+            if (sTeamIdx === targetTeamIdx) {
+                alert("無法移動至同一隊！");
+                return;
+            }
+
+            transactionUpdate(data => {
+                const teams = data.weeksData[state.activeWeek].groups[state.activeGroup].teams;
+                if (!teams[sTeamIdx] || !teams[targetTeamIdx]) return false;
+
+                const sourceTeam = teams[sTeamIdx];
+                const targetTeam = teams[targetTeamIdx];
+
+                // 將來源隊伍成員合併至目標隊伍
+                sourceTeam.members.forEach(member => {
+                    if (!targetTeam.members.some(m => String(m.id) === String(member.id))) {
+                        targetTeam.members.push(member);
+                    }
+                });
+
+                // 清空來源隊伍
+                sourceTeam.members = [];
+                sourceTeam.con = false;
+                return true;
+            });
+        }
+
+        function getAvailableWeekKeys() {
+            const set = new Set(Object.keys(state.weeksData || {}));
+            const base = getTuesdayOfWeek();
+            for (let i = -1; i <= 2; i++) {
+                const d = new Date(base); 
+                d.setDate(d.getDate() + i * 7);
+                set.add(formatDateKey(d));
+            }
+            return Array.from(set).sort();
         }
 
         function selectWeek(wk) {
             if (!wk) return;
-            transactionUpdate(data => { data.activeWeek = wk; return true; });
+            transactionUpdate(data => {
+                data.activeWeek = wk;
+                if (!data.weeksData[wk]) data.weeksData[wk] = { groups: createDefaultWeekGroups(wk) };
+                return true;
+            });
         }
 
         function switchWeekRelative(delta) {
@@ -258,10 +739,205 @@
             selectWeek(formatDateKey(t));
         }
 
-        function jumpToCurrentWeek() { selectWeek(formatDateKey(getTuesdayOfWeek())); }
+        function jumpToCurrentWeek() { 
+            selectWeek(formatDateKey(getTuesdayOfWeek())); 
+        }
 
-        function getJobColorClass(job) { return JOB_STYLE_MAP[job]?.class || DEFAULT_JOB_CLASS; }
-        function getJobOptionStyle(job) { return JOB_STYLE_MAP[job]?.style || DEFAULT_JOB_STYLE; }
+        function deleteCurrentWeek() {
+            const wk = state.activeWeek;
+            if (!confirm(`確定要刪除「${getWeekDisplayTitle(wk)}」的週別資料嗎？`)) return;
+            transactionUpdate(data => {
+                delete data.weeksData[wk];
+                data.activeWeek = formatDateKey(getTuesdayOfWeek());
+                if (!data.weeksData[data.activeWeek]) data.weeksData[data.activeWeek] = { groups: createDefaultWeekGroups(data.activeWeek) };
+                return true;
+            });
+        }
+
+        function switchTab(tab) { currentTab = tab; render(); }
+        function selectGroup(idx) { state.activeGroup = idx; render(); }
+
+        function addTeamToCurrentGroup() {
+            transactionUpdate(data => {
+                const g = data.weeksData[state.activeWeek].groups[state.activeGroup];
+                g.teams.push({ name: `第${g.teams.length + 1}隊`, emoji: "⚔️", time: "20:00", con: false, members: [] });
+                return true;
+            });
+        }
+
+        function removeTeamFromCurrentGroup() {
+            transactionUpdate(data => {
+                const g = data.weeksData[state.activeWeek].groups[state.activeGroup];
+                if (g.teams.length === 0) {
+                    alert("目前已經沒有隊伍！");
+                    return false;
+                }
+                const lastTeam = g.teams[g.teams.length - 1];
+                const hasMembers = lastTeam.members && lastTeam.members.length > 0;
+                
+                const msg = hasMembers 
+                    ? `確定要移除【${lastTeam.name}】嗎？該隊伍內有 ${lastTeam.members.length} 名成員，移除後成員將回歸總名單。`
+                    : `確定要移除【${lastTeam.name}】嗎？`;
+
+                if (confirm(msg)) {
+                    g.teams.pop();
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        function updateTeamName(tIdx, name) {
+            transactionUpdate(data => { 
+                data.weeksData[state.activeWeek].groups[state.activeGroup].teams[tIdx].name = String(name || `第${tIdx + 1}隊`); 
+                return true; 
+            });
+        }
+
+        function updateTeamTime(tIdx, time) {
+            transactionUpdate(data => { 
+                data.weeksData[state.activeWeek].groups[state.activeGroup].teams[tIdx].time = String(time || "20:00"); 
+                return true; 
+            });
+        }
+
+        function updateTeamCon(tIdx, con) {
+            transactionUpdate(data => { 
+                data.weeksData[state.activeWeek].groups[state.activeGroup].teams[tIdx].con = Boolean(con); 
+                return true; 
+            });
+        }
+
+        function updateTeamMemberPart(tIdx, mIdx, part) {
+            transactionUpdate(data => {
+                const m = data.weeksData[state.activeWeek].groups[state.activeGroup].teams[tIdx].members[mIdx];
+                m.part = (m.part === part) ? "" : part;
+                return true;
+            });
+        }
+
+        function updateGroupDate(idx, date) {
+            transactionUpdate(data => { 
+                data.weeksData[state.activeWeek].groups[idx].date = String(date); 
+                return true; 
+            });
+        }
+
+        function updatePlayerField(id, field, val) {
+            const norm = field === "level" ? normalizeLevel(val) : String(val);
+            transactionUpdate(data => {
+                const p = data.pool.find(item => String(item.id) === String(id));
+                if (p) p[field] = norm;
+                
+                for (const wk in data.weeksData) {
+                    (data.weeksData[wk].groups || []).forEach(g => {
+                        (g.teams || []).forEach(t => {
+                            (t.members || []).forEach(m => { 
+                                if (String(m.id) === String(id)) m[field] = norm; 
+                            });
+                        });
+                    });
+                }
+                return true;
+            });
+        }
+
+        function updatePlayerAvailability(id, dayIdx, val) {
+            const wk = state.activeWeek;
+            transactionUpdate(data => {
+                const update = (p) => {
+                    if (!p.availability || Array.isArray(p.availability)) p.availability = { [wk]: ["", "", "", "", "", "", ""] };
+                    if (!p.availability[wk]) p.availability[wk] = ["", "", "", "", "", "", ""];
+                    p.availability[wk][dayIdx] = String(val);
+                };
+                
+                const p = data.pool.find(item => String(item.id) === String(id));
+                if (p) update(p);
+                
+                for (const w in data.weeksData) {
+                    (data.weeksData[w].groups || []).forEach(g => {
+                        (g.teams || []).forEach(t => {
+                            (t.members || []).forEach(m => { 
+                                if (String(m.id) === String(id)) update(m); 
+                            });
+                        });
+                    });
+                }
+                return true;
+            });
+        }
+
+        function addEmptyPoolPlayer() {
+            transactionUpdate(data => {
+                data.pool.push({
+                    id: makeId(), level: "", name: "", job: "", position: "", rounds: "7", groupId: "", part: "",
+                    availability: { [state.activeWeek]: ["", "", "", "", "", "", ""] }, note: ""
+                });
+                return true;
+            });
+        }
+
+        function deletePoolPlayer(id) {
+            if (!confirm("確定要刪除此成員嗎？")) return;
+            transactionUpdate(data => {
+                data.pool = data.pool.filter(p => String(p.id) !== String(id));
+                for (const wk in data.weeksData) {
+                    (data.weeksData[wk].groups || []).forEach(g => {
+                        (g.teams || []).forEach(t => { 
+                            t.members = (t.members || []).filter(m => String(m.id) !== String(id)); 
+                        });
+                    });
+                }
+                return true;
+            });
+        }
+
+        function sendToTeam(id, tIdx) {
+            transactionUpdate(data => {
+                const p = data.pool.find(item => String(item.id) === String(id));
+                const wData = data.weeksData[state.activeWeek];
+                const targetTeam = wData.groups[state.activeGroup].teams[tIdx];
+                
+                if (hasReachedWeeklyLimit(p, wData)) { 
+                    alert("此玩家本週已達出賽上限！"); 
+                    return false; 
+                }
+                if (targetTeam.members.some(m => String(m.id) === String(id))) return false;
+                
+                targetTeam.members.push({ ...p });
+                return true; 
+            });
+        }
+
+        function removeFromTeam(tIdx, mIdx) {
+            transactionUpdate(data => { 
+                data.weeksData[state.activeWeek].groups[state.activeGroup].teams[tIdx].members.splice(mIdx, 1); 
+                return true; 
+            });
+        }
+
+        function clearCurrentGroup() {
+            if (!confirm("確定要清空當前團的所有隊伍成員嗎？")) return;
+            transactionUpdate(data => {
+                (data.weeksData[state.activeWeek].groups[state.activeGroup].teams || []).forEach(t => { 
+                    t.members = []; 
+                    t.time = "20:00"; 
+                    t.con = false; 
+                });
+                return true; 
+            });
+        }
+
+        // ==========================================
+        // 9. 視圖渲染與 HTML 生成 (DOM Rendering)
+        // ==========================================
+        function getJobColorClass(job) {
+            return JOB_STYLE_MAP[job]?.class || DEFAULT_JOB_CLASS;
+        }
+
+        function getJobOptionStyle(job) {
+            return JOB_STYLE_MAP[job]?.style || DEFAULT_JOB_STYLE;
+        }
 
         function renderJobSelectOptions(currentJob) {
             let html = `<option value="" style="${DEFAULT_JOB_STYLE}" ${!currentJob ? "selected" : ""}>職業</option>`;
@@ -286,6 +962,7 @@
                     <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
                     <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200">
                         <option value="" ${!avail[i] ? "selected" : ""}></option>
+                        <option value="19:00~" ${avail[i] === "19:00~" ? "selected" : ""}>19:00~</option>
                         <option value="20:00~" ${avail[i] === "20:00~" ? "selected" : ""}>20:00~</option>
                         <option value="21:00~" ${avail[i] === "21:00~" ? "selected" : ""}>21:00~</option>
                     </select>
@@ -293,126 +970,390 @@
             `).join("");
         }
 
-        function updatePlayerField(id, field, val) {
-            const norm = field === "level" ? normalizeLevel(val) : String(val);
-            transactionUpdate(data => {
-                const p = data.pool.find(item => String(item.id) === String(id));
-                if (p) p[field] = norm;
-                return true;
-            });
+        function memberCard(player, idx, tIdx) {
+            return `
+                <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 transition">
+                    <div class="min-w-0 pr-1 flex-1 flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs text-slate-500">#${idx + 1}</span>
+                        <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400">
+                        <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-20 rounded border px-1 py-0.5 text-xs ${getJobColorClass(player.job)}">
+                            ${renderJobSelectOptions(player.job)}
+                        </select>
+                        <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 font-bold">
+                        <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300">
+                        
+                        <div class="flex items-center gap-1 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-900/60">
+                            <label class="flex items-center gap-1 text-[11px] text-purple-300 cursor-pointer">
+                                <input type="checkbox" ${player.part === "first" ? "checked" : ""} onchange="updateTeamMemberPart(${tIdx}, ${idx}, 'first')"> 前7
+                            </label>
+                            <label class="flex items-center gap-1 text-[11px] text-purple-300 cursor-pointer ml-1">
+                                <input type="checkbox" ${player.part === "second" ? "checked" : ""} onchange="updateTeamMemberPart(${tIdx}, ${idx}, 'second')"> 後7
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
+                        <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200">
+                            <option value="7" ${player.rounds === "7" ? "selected" : ""}>7場</option>
+                            <option value="14" ${player.rounds === "14" ? "selected" : ""}>14場</option>
+                        </select>
+                        <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
+                    </div>
+                    <button onclick="removeFromTeam(${tIdx}, ${idx})" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
+                </div>
+            `;
         }
 
-        function updatePlayerAvailability(id, dayIdx, val) {
-            const wk = state.activeWeek;
-            transactionUpdate(data => {
-                const p = data.pool.find(item => String(item.id) === String(id));
-                if (p) {
-                    if (!p.availability || Array.isArray(p.availability)) p.availability = { [wk]: ["", "", "", "", "", "", ""] };
-                    if (!p.availability[wk]) p.availability[wk] = ["", "", "", "", "", "", ""];
-                    p.availability[wk][dayIdx] = String(val);
-                }
-                return true;
-            });
-        }
+        function renderTeamsContainer() {
+            let html = "";
+            const currentTeams = currentGroup().teams || [];
 
-        function addEmptyPoolPlayer() {
-            transactionUpdate(data => {
-                data.pool.push({
-                    id: makeId(), level: "", name: "", job: "", position: "", rounds: "7", groupId: "",
-                    availability: { [state.activeWeek]: ["", "", "", "", "", "", ""] }, note: ""
+            const otherDayOptions = GROUP_NAMES.map((name, gIdx) => {
+                if (gIdx === state.activeGroup) return '';
+                return `<option value="${gIdx}">移至 ${name}</option>`;
+            }).join("");
+
+            if (currentTeams.length === 0) {
+                return `<div class="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">當前遠征團暫無任何隊伍，請點擊上方「➕ 新增隊伍」按鈕新增。</div>`;
+            }
+
+            currentTeams.forEach((team, tIdx) => {
+                const members = team.members || [];
+                
+                // 本日其他隊伍選項 (供同日隊伍互轉)
+                let otherTeamsOptions = `<option value="">移至同日其他隊...</option>`;
+                currentTeams.forEach((ot, otIdx) => {
+                    if (otIdx !== tIdx) {
+                        otherTeamsOptions += `<option value="${otIdx}">移至 ${escapeHtml(ot.name)}</option>`;
+                    }
                 });
-                return true;
+
+                html += `
+                    <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <span class="text-lg">⚔️</span>
+                                <input type="text" value="${escapeHtml(team.name)}" onchange="updateTeamName(${tIdx}, this.value)" class="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-base font-bold text-blue-300">
+                                <input type="text" value="${escapeHtml(team.time || "20:00")}" maxlength="5" onchange="updateTeamTime(${tIdx}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400 font-bold">
+                                <label class="flex items-center gap-1 text-xs text-amber-300 bg-amber-950/60 border border-amber-900 px-2.5 py-1 rounded-lg cursor-pointer">
+                                    <input type="checkbox" ${team.con ? "checked" : ""} onchange="updateTeamCon(${tIdx}, this.checked)"> 連14場
+                                </label>
+                            </div>
+
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <!-- 同日隊伍移動選單 -->
+                                <div class="flex items-center gap-1 bg-slate-800/60 p-1 rounded-lg border border-slate-700">
+                                    <select id="move-to-team-${tIdx}" class="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200">
+                                        ${otherTeamsOptions}
+                                    </select>
+                                    <button onclick="moveTeamToTeam(${tIdx}, document.getElementById('move-to-team-${tIdx}').value)" class="rounded bg-slate-700 hover:bg-slate-600 px-2.5 py-1 text-xs font-bold text-slate-200 transition">整隊移動</button>
+                                </div>
+
+                                <!-- 跨日轉移選單 -->
+                                <div class="flex items-center gap-1 bg-blue-950/60 p-1 rounded-lg border border-blue-800/80">
+                                    <select id="move-team-select-${tIdx}" class="rounded border border-blue-700 bg-slate-900 px-2 py-1 text-xs text-blue-300 font-bold">
+                                        <option value="">整隊轉移至...</option>
+                                        ${otherDayOptions}
+                                    </select>
+                                    <button onclick="moveEntireTeamToTargetGroup(${tIdx}, document.getElementById('move-team-select-${tIdx}').value)" class="rounded bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-xs font-bold text-white transition">轉移至其他日</button>
+                                </div>
+                                <span class="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">${members.length} 人</span>
+                            </div>
+                        </div>
+                        <div id="team_${tIdx}-list" data-list-type="team_${tIdx}" class="sortable-list grid min-h-[80px] gap-3">
+                            ${members.length === 0 ? `<p class="text-center text-xs text-slate-500 py-4">此隊伍目前暫無成員</p>` : members.map((m, mIdx) => memberCard(m, mIdx, tIdx)).join("")}
+                        </div>
+                    </div>
+                `;
             });
+            return html;
         }
 
-        function deletePoolPlayer(id) {
-            if (!confirm("確定要刪除此成員嗎？")) return;
-            transactionUpdate(data => {
-                data.pool = data.pool.filter(p => String(p.id) !== String(id));
-                return true;
-            });
-        }
-
-        function sortPoolBy(field) {
-            if (poolSortState.field === field) {
-                poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                poolSortState.field = field;
-                poolSortState.direction = field === 'level' ? 'desc' : 'asc';
-            }
-            const dir = poolSortState.direction === 'asc' ? 1 : -1;
-            state.pool.sort((a, b) => {
-                if (field === 'level') return (Number(getPlayerLevel(b)) - Number(getPlayerLevel(a))) * dir;
-                if (field === 'job') return String(a.job || '').localeCompare(String(b.job || ''), 'zh-TW') * dir;
-                return 0;
-            });
-            render();
-        }
-
-        function getAvailableWeekKeys() {
-            const set = new Set(Object.keys(state.weeksData || {}));
-            const base = getTuesdayOfWeek();
-            for (let i = -1; i <= 2; i++) {
-                const d = new Date(base); d.setDate(d.getDate() + i * 7);
-                set.add(formatDateKey(d));
-            }
-            return Array.from(set).sort();
-        }
-
-        function render() {
-            const weekKeys = getAvailableWeekKeys();
-            document.getElementById("week-select").innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
+        function renderPool(isMasterView) {
+            const idSuffix = isMasterView ? "master" : "teams";
+            const wData = currentWeekData();
+            
+            let displayPool = isMasterView 
+                ? state.pool 
+                : state.pool.filter(p => !hasReachedWeeklyLimit(p, wData));
 
             const getIcon = f => poolSortState.field !== f ? '↕️' : (poolSortState.direction === 'asc' ? '▲' : '▼');
+            const teams = currentGroup().teams || [];
 
             let html = `
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
                     <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                        <h2 class="text-lg font-bold text-slate-200">👥 總名單成員 (${state.pool.length}人)</h2>
+                        <h2 class="text-lg font-bold text-slate-200">👥 總名單成員</h2>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">等級 ${getIcon('level')}</button>
                             <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">職業 ${getIcon('job')}</button>
-                            <button onclick="addEmptyPoolPlayer()" class="rounded border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs font-bold text-blue-300">➕ 新增自己</button>
+                            <button onclick="addEmptyPoolPlayer()" class="rounded border border-blue-600 bg-blue-600/20 px-2.5 py-1 text-xs text-blue-300">➕ 新增成員</button>
                         </div>
                     </div>
-                    <div class="flex flex-col gap-2">
+                    <div id="pool-list-${idSuffix}" data-list-type="pool" class="sortable-list flex flex-col gap-2 min-h-[80px]">
             `;
 
-            if (state.pool.length === 0) {
-                html += `<p class="text-center text-sm text-slate-500 py-6">目前尚無成員，請點擊上方「➕ 新增自己」按鈕填寫資料。</p>`;
+            if (displayPool.length === 0) {
+                html += `<p class="text-center text-sm text-slate-500 py-6">目前沒有可分配的成員（所有成員皆已達到本週出賽上限）</p>`;
             } else {
-                state.pool.forEach((player, idx) => {
+                displayPool.forEach((player, idx) => {
                     html += `
-                        <div class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm flex-wrap gap-2">
+                        <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm">
                             <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
                                 <span class="text-xs text-slate-500">#${idx + 1}</span>
-                                <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" placeholder="等級" class="w-12 rounded border border-slate-800 bg-slate-900 px-1 py-1 text-center text-xs text-blue-400">
-                                <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-24 rounded border px-1 py-1 text-xs ${getJobColorClass(player.job)}">
+                                <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400">
+                                <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-20 rounded border px-1 py-0.5 text-xs ${getJobColorClass(player.job)}">
                                     ${renderJobSelectOptions(player.job)}
                                 </select>
-                                <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" placeholder="遊戲名字" class="w-24 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-200 font-bold">
-                                <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-300">
+                                <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 font-bold">
+                                <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300">
                                 <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
-                                <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-xs text-slate-200">
+                                <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200">
                                     <option value="7" ${player.rounds === "7" ? "selected" : ""}>7場</option>
                                     <option value="14" ${player.rounds === "14" ? "selected" : ""}>14場</option>
                                 </select>
-                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-22 rounded border border-amber-900 bg-amber-950/40 px-1 py-1 text-xs text-amber-300">
+                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-22 rounded border border-amber-900 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300">
                                     ${renderGroupSelectOptions(player.groupId)}
                                 </select>
-                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-400">
+                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
                             </div>
-                            <div class="flex items-center gap-1 shrink-0">
-                                <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950">刪除</button>
+                            <div class="flex items-center gap-1 shrink-0 ml-2">
+                                ${!isMasterView ? teams.map((t, tIdx) => `<button onclick="sendToTeam('${player.id}',${tIdx})" class="rounded border border-blue-900 bg-blue-950 px-2 py-1 text-xs text-blue-300">+${escapeHtml(t.name)}</button>`).join('') : ''}
+                                <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
                             </div>
                         </div>
                     `;
                 });
             }
             html += `</div></div>`;
-            document.getElementById("master-view-container").innerHTML = html;
+            return html;
         }
 
+        // ==========================================
+        // 10. 拖曳元件初始化 (Sortable.js)
+        // ==========================================
+        function initSortables() {
+            sortableInstances.forEach(i => i.destroy());
+            sortableInstances = [];
+            
+            document.querySelectorAll(".sortable-list").forEach(el => {
+                if (el.closest(".hidden")) return;
+                
+                const inst = new Sortable(el, {
+                    group: { name: "artale-shared-lists", pull: (to, from) => from.el.dataset.listType === "pool" ? "clone" : true },
+                    draggable: ".drag-item",
+                    animation: 150,
+                    filter: "input, button, select",
+                    preventOnFilter: false,
+                    ghostClass: "sortable-ghost",
+                    dragClass: "sortable-drag",
+                    onEnd: function(evt) {
+                        const fromType = evt.from.dataset.listType;
+                        const toType = evt.to.dataset.listType;
+                        const itemId = evt.item?.dataset?.id;
+                        const newIndex = evt.newDraggableIndex ?? evt.newIndex;
+                        
+                        if (!itemId || (fromType === toType && evt.oldDraggableIndex === newIndex)) return;
+
+                        transactionUpdate(data => {
+                            const p = data.pool.find(item => String(item.id) === String(itemId));
+                            if (!p) return false;
+                            
+                            if (fromType === "pool" && toType === "pool") {
+                                data.pool = data.pool.filter(item => String(item.id) !== String(itemId));
+                                data.pool.splice(newIndex, 0, p);
+                                return true;
+                            }
+                            
+                            const wData = data.weeksData[state.activeWeek];
+                            const targetGroup = wData.groups[state.activeGroup];
+                            
+                            if (fromType === "pool" && toType.startsWith("team_")) {
+                                const tIdx = parseInt(toType.replace("team_", ""), 10);
+                                if (hasReachedWeeklyLimit(p, wData)) { 
+                                    alert("已達本週出賽上限！"); 
+                                    return false; 
+                                }
+                                targetGroup.teams[tIdx].members.splice(newIndex, 0, { ...p });
+                                return true;
+                            }
+                            
+                            if (fromType.startsWith("team_") && toType.startsWith("team_")) {
+                                const sTeam = targetGroup.teams[parseInt(fromType.replace("team_", ""), 10)].members;
+                                const tTeam = targetGroup.teams[parseInt(toType.replace("team_", ""), 10)].members;
+                                const idx = sTeam.findIndex(item => String(item.id) === String(itemId));
+                                
+                                if (idx > -1) {
+                                    const [moved] = sTeam.splice(idx, 1);
+                                    tTeam.splice(newIndex, 0, moved);
+                                    return true;
+                                }
+                            }
+                            return false;
+                        });
+                    }
+                });
+                sortableInstances.push(inst);
+            });
+        }
+
+        // ==========================================
+        // 11. 圖片匯出與 Modal 功能 (Export & Modal)
+        // ==========================================
+        function formatShareHeader() {
+            return `
+                <div class="share-row-item" style="border-bottom: 1px solid #334155; padding-bottom: 2px; margin-bottom: 4px; font-weight: 700; color: #94a3b8; font-size: 13px;">
+                    <div class="share-col-level">等級</div>
+                    <div class="share-col-job">職業</div>
+                    <div class="share-col-name">名字</div>
+                    <div class="share-col-part">場次</div>
+                </div>
+            `;
+        }
+
+        function formatShareLine(player) {
+            const level = getPlayerLevel(player);
+            let nameStr = player.name || "";
+            if (nameStr.length > 7) {
+                nameStr = nameStr.slice(0, 7);
+            }
+
+            let partText = "";
+            if (player.part === "first") partText = "前7場";
+            else if (player.part === "second") partText = "後7場";
+
+            return `
+                <div class="share-row-item">
+                    <div class="share-col-level">${escapeHtml(level || "---")}</div>
+                    <div class="share-col-job">${escapeHtml(player.job || "")}</div>
+                    <div class="share-col-name">${escapeHtml(nameStr)}</div>
+                    <div class="share-col-part">${escapeHtml(partText)}</div>
+                </div>
+            `;
+        }
+
+        async function generateAllTeamsImage() {
+            if (typeof html2canvas === "undefined") return;
+            const shareCard = document.getElementById("share-card");
+            const wData = currentWeekData();
+            let columnsHtml = "", count = 0;
+
+            wData.groups.forEach((group, gIdx) => {
+                const teams = group.teams || [];
+                if (!teams.some(t => (t.members || []).length > 0)) return;
+
+                let colHtml = `<div class="share-group-column"><div class="share-group-header-text">${escapeHtml(group.date ? `${GROUP_NAMES[gIdx]} -${group.date}` : GROUP_NAMES[gIdx])}</div>`;
+                teams.forEach((team, tIdx) => {
+                    if ((team.members || []).length > 0) {
+                        colHtml += `<div class="share-team-title-text" ${tIdx > 0 ? 'style="margin-top:6px;"' : ''}>${team.emoji || "⚔️"} ${escapeHtml(team.name)} (${escapeHtml(team.time || "20:00")}) (${team.members.length}人)${team.con ? " (連14場)" : ""}</div>`;
+                        colHtml += formatShareHeader();
+                        team.members.forEach(p => colHtml += formatShareLine(p));
+                    }
+                });
+                colHtml += `</div>`;
+                columnsHtml += colHtml;
+                count++;
+            });
+
+            if (count === 0) { alert("本週無任何隊伍可產生圖片！"); return; }
+
+            previewImages = [];
+            shareCard.innerHTML = `<div class="share-card-inner">${columnsHtml}</div>`;
+            try {
+                await new Promise(r => requestAnimationFrame(r));
+                const canvas = await html2canvas(shareCard.firstElementChild, { scale: 2, useCORS: true, backgroundColor: "#111111", logging: false });
+                previewImages.push({ title: `本週全部隊伍 (${getWeekDisplayTitle(state.activeWeek)})`, dataUrl: canvas.toDataURL("image/png") });
+            } catch(e) {}
+            shareCard.innerHTML = "";
+            if (previewImages.length > 0) { currentImageIndex = 0; showModal(); }
+        }
+
+        function showModal() { 
+            updateModalContent(); 
+            document.getElementById("image-modal").classList.remove("hidden"); 
+        }
+
+        function closeModal() { 
+            document.getElementById("image-modal").classList.add("hidden"); 
+        }
+
+        function updateModalContent() {
+            const item = previewImages[currentImageIndex];
+            if (!item) return;
+            document.getElementById("modal-img").src = item.dataUrl;
+            document.getElementById("modal-title").innerText = `圖片預覽 - ${item.title}`;
+            document.getElementById("modal-page-info").innerText = `${currentImageIndex + 1} / ${previewImages.length}`;
+            document.getElementById("btn-prev").disabled = currentImageIndex === 0;
+            document.getElementById("btn-next").disabled = currentImageIndex === previewImages.length - 1;
+        }
+
+        function changeImage(step) { 
+            if (previewImages[currentImageIndex + step]) { 
+                currentImageIndex += step; 
+                updateModalContent(); 
+            } 
+        }
+
+        async function copyModalImage() {
+            const btn = document.getElementById("btn-copy-img");
+            try {
+                const blob = await (await fetch(previewImages[currentImageIndex].dataUrl)).blob();
+                await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+                btn.innerText = "✓ 已複製！";
+                setTimeout(() => btn.innerText = "📋 複製圖片", 1500);
+            } catch(e) { 
+                btn.innerText = "✕ 失敗"; 
+            }
+        }
+
+        function downloadModalImage() {
+            const link = document.createElement("a");
+            link.download = `Artale_${previewImages[currentImageIndex].title}.png`;
+            link.href = previewImages[currentImageIndex].dataUrl;
+            link.click();
+        }
+
+        // ==========================================
+        // 12. 主渲染進入點 (Main Render Routine)
+        // ==========================================
+        function render() {
+            const weekKeys = getAvailableWeekKeys();
+            document.getElementById("week-select").innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
+            
+            const wData = currentWeekData(), curGroup = currentGroup(), teamsList = curGroup.teams || [];
+            let totalM = 0; 
+            teamsList.forEach(t => totalM += (t.members?.length || 0));
+
+            document.getElementById("master-tab-badge").innerText = `${state.pool.length}人`;
+            document.getElementById("teams-tab-badge").innerText = `${totalM}/18`;
+            document.getElementById("current-teams-count").innerText = teamsList.length;
+
+            const isMaster = currentTab === "master";
+            document.getElementById("tab-btn-master").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isMaster ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
+            document.getElementById("tab-btn-teams").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${!isMaster ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
+            
+            document.getElementById("tab-content-master").classList.toggle("hidden", !isMaster);
+            document.getElementById("tab-content-teams").classList.toggle("hidden", isMaster);
+
+            document.getElementById("group-tabs").innerHTML = wData.groups.map((g, idx) => {
+                const wd = getWeekday(g.date);
+                return `
+                    <div class="flex flex-col items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950 p-2.5">
+                        <button onclick="selectGroup(${idx})" class="rounded-md px-3.5 py-1.5 text-xs font-semibold transition ${idx === state.activeGroup ? "bg-blue-600 text-white" : "bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800"}">${GROUP_NAMES[idx]}</button>
+                        <div class="flex items-center gap-1">
+                            <input type="text" value="${escapeHtml(g.date || "")}" maxlength="5" onchange="updateGroupDate(${idx}, this.value)" class="w-24 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-center text-xs text-slate-200">
+                            ${wd ? `<span class="text-xs text-blue-400">(${wd})</span>` : ""}
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            document.getElementById("master-view-container").innerHTML = renderPool(true);
+            document.getElementById("teams-cards-container").innerHTML = renderTeamsContainer();
+            document.getElementById("teams-pool-container").innerHTML = renderPool(false);
+
+            initSortables();
+        }
+
+        // 啟動應用程式
         initFirebaseListener();
     </script>
 </body>
