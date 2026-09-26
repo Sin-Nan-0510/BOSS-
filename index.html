@@ -286,7 +286,7 @@
                     <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
                     <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200">
                         <option value="" ${!avail[i] ? "selected" : ""}></option>
-                        <option value="19:00~" ${avail[i] === "19:00~" ? "selected" : ""}>19:00~</option>
+                        <option value="19:30~" ${avail[i] === "19:30~" ? "selected" : ""}>19:30~</option>
                         <option value="20:00~" ${avail[i] === "20:00~" ? "selected" : ""}>20:00~</option>
                         <option value="21:00~" ${avail[i] === "21:00~" ? "selected" : ""}>21:00~</option>
                     </select>
