@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>樹王報名</title>
+    <title>Artale 遠征團名單 (填寫)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
     <style>
         * { box-sizing: border-box; }
@@ -19,30 +18,14 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
-        .drag-item { cursor: grab; }
-        .drag-item:active { cursor: grabbing; }
-        .sortable-ghost {
-            opacity: 0.3;
-            background-color: #3b82f6 !important;
-            border: 2px dashed #60a5fa !important;
-        }
-        .sortable-drag {
-            cursor: grabbing !important;
-            opacity: 0.9;
-            transform: scale(1.02);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        }
     </style>
 </head>
 
 <body class="min-h-screen p-4 md:p-8">
-    <div class="mx-auto max-w-7xl">
+    <div class="mx-auto max-w-6xl">
         <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
-            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">
-                樹王報名
-            </h1>
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 遠征團名單</h1>
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
@@ -56,15 +39,13 @@
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
             </div>
             <div class="text-xs text-slate-400">
-                💡 請填寫您的<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP與每週各天可參與狀況</span>。
+                💡 請填寫您的基本資料與本週可配合時間。
             </div>
         </div>
 
-        <!-- 主內容區：僅保留總名單 -->
+        <!-- 主內容區：總名單表格/列表 -->
         <main class="space-y-6">
-            <div class="space-y-6">
-                <div id="master-view-container"></div>
-            </div>
+            <div id="master-view-container"></div>
         </main>
     </div>
 
@@ -73,8 +54,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 
     <script>
-        // ==================== 1. 基礎設定與常數 ====================
-        const firebaseConfig = {
+        const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCbD0DlTCKkDzjkyADmovtjSe6j6blClZI",
             authDomain: "boss-3a974.firebaseapp.com",
             databaseURL: "https://boss-3a974-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -85,20 +65,32 @@
         };
 
         const FIREBASE_PATH = "artale_party_state_v3";
-        const STORAGE_KEY = "artale_party_local_v3";
+        const STORAGE_KEY = "artale_party_local_master_v3";
         const MAX_GROUPS = 7;
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const JOB_LIST = ["黑騎士", "聖騎士", "英雄", "火毒", "冰雷", "主教", "箭神", "神射手", "夜使者", "暗影神偷", "槍神", "拳霸"];
 
-        // ==================== 2. 全域狀態變數 ====================
+        const JOB_STYLE_MAP = {
+            "黑騎士":   { class: "bg-rose-900/80 border-rose-500 text-rose-200 font-bold",       style: "background-color: #881337; color: #fecdd3;" },
+            "聖騎士":   { class: "bg-rose-900/80 border-rose-500 text-rose-200 font-bold",       style: "background-color: #881337; color: #fecdd3;" },
+            "英雄":     { class: "bg-rose-900/80 border-rose-500 text-rose-200 font-bold",       style: "background-color: #881337; color: #fecdd3;" },
+            "火毒":     { class: "bg-sky-900/80 border-sky-500 text-sky-200 font-bold",         style: "background-color: #075985; color: #bae6fd;" },
+            "冰雷":     { class: "bg-sky-900/80 border-sky-500 text-sky-200 font-bold",         style: "background-color: #075985; color: #bae6fd;" },
+            "主教":     { class: "bg-sky-900/80 border-sky-500 text-sky-200 font-bold",         style: "background-color: #075985; color: #bae6fd;" },
+            "箭神":     { class: "bg-fuchsia-900/80 border-fuchsia-500 text-fuchsia-200 font-bold", style: "background-color: #701a75; color: #f5d0fe;" },
+            "神射手":   { class: "bg-fuchsia-900/80 border-fuchsia-500 text-fuchsia-200 font-bold", style: "background-color: #701a75; color: #f5d0fe;" },
+            "夜使者":   { class: "bg-orange-900/80 border-orange-500 text-orange-200 font-bold", style: "background-color: #7c2d12; color: #ffedd5;" },
+            "暗影神偷": { class: "bg-orange-900/80 border-orange-500 text-orange-200 font-bold", style: "background-color: #7c2d12; color: #ffedd5;" },
+            "槍神":     { class: "bg-emerald-900/80 border-emerald-500 text-emerald-200 font-bold", style: "background-color: #064e3b; color: #a7f3d0;" },
+            "拳霸":     { class: "bg-emerald-900/80 border-emerald-500 text-emerald-200 font-bold", style: "background-color: #064e3b; color: #a7f3d0;" }
+        };
+
+        const DEFAULT_JOB_CLASS = "bg-slate-900 border-slate-800 text-slate-400";
+        const DEFAULT_JOB_STYLE = "background-color: #0f172a; color: #94a3b8;";
+
         let database = null;
         let firebaseEnabled = false;
-        let sortableInstances = [];
-
-        let poolSortState = {
-            field: null,
-            direction: 'desc'
-        };
+        let poolSortState = { field: null, direction: 'desc' };
 
         let state = {
             activeWeek: formatDateKey(getTuesdayOfWeek()),
@@ -106,111 +98,175 @@
             weeksData: {}
         };
 
-        // ==================== 3. 排序與樣式輔助函式 ====================
-        function sortPoolBy(field) {
-            if (poolSortState.field === field) {
-                poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                poolSortState.field = field;
-                poolSortState.direction = field === 'level' ? 'desc' : 'asc';
+        function makeId() { return Date.now() + "-" + Math.random().toString(36).substring(2, 10); }
+
+        function escapeHtml(str) {
+            return String(str ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+        }
+
+        function isLevel(val) { return /^(?:lv\.?\s*)?\d+$/i.test(String(val || "").trim()); }
+        function normalizeLevel(val) { const match = String(val || "").trim().match(/\d+/); return match ? match[0] : ""; }
+
+        function getPlayerLevel(player) {
+            if (!player) return "";
+            for (const v of [player.level, player.lv, player["等級"], player.levelText]) {
+                if (isLevel(v)) return normalizeLevel(v);
+            }
+            return "";
+        }
+
+        function getTuesdayOfWeek(d = new Date()) {
+            const date = new Date(d);
+            const day = date.getDay();
+            date.setDate(date.getDate() + ((day >= 2) ? (2 - day) : (2 - day - 7)));
+            date.setHours(0, 0, 0, 0);
+            return date;
+        }
+
+        function formatDateKey(date) {
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function getWeekDisplayTitle(weekKey) {
+            if (!weekKey) return "";
+            const [y, m, d] = weekKey.split('-').map(Number);
+            if (!y) return weekKey;
+            const start = new Date(y, m - 1, d);
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            const rangeStr = `${start.getFullYear()} ${String(start.getMonth() + 1).padStart(2, '0')}/${String(start.getDate()).padStart(2, '0')} ~ ${end.getMonth() + 1}/${String(end.getDate()).padStart(2, '0')}`;
+            const thisKey = formatDateKey(getTuesdayOfWeek());
+            if (weekKey === thisKey) return `${rangeStr} (本週)`;
+            return rangeStr;
+        }
+
+        function setSyncStatus(text, className = "text-[11px] text-slate-500") {
+            const el = document.getElementById("sync-status");
+            if (el) { el.className = `mt-1 ${className}`; el.textContent = text; }
+        }
+
+        function normalizeAvailabilityArray(arr) {
+            const def = ["", "", "", "", "", "", ""];
+            return Array.isArray(arr) ? def.map((_, i) => typeof arr[i] === "string" ? arr[i] : "") : def;
+        }
+
+        function normalizePlayerAvailability(avail, wk) {
+            if (Array.isArray(avail)) return { [wk]: normalizeAvailabilityArray(avail) };
+            if (avail && typeof avail === "object") {
+                const res = {};
+                for (const k in avail) res[k] = normalizeAvailabilityArray(avail[k]);
+                return res;
+            }
+            return { [wk]: ["", "", "", "", "", "", ""] };
+        }
+
+        function getPlayerWeekAvailability(player, wk) {
+            if (!player || !player.availability) return ["", "", "", "", "", "", ""];
+            if (Array.isArray(player.availability)) return normalizeAvailabilityArray(player.availability);
+            return normalizeAvailabilityArray(player.availability[wk]);
+        }
+
+        function normalizePlayer(player, activeWeekKey) {
+            if (!player || typeof player !== "object") return null;
+            const wk = activeWeekKey || formatDateKey(getTuesdayOfWeek());
+            return {
+                id: String(player.id || makeId()),
+                level: getPlayerLevel(player),
+                name: String(player.name || "").trim(),
+                job: String(player.job || "").trim(),
+                position: String(player.position || "").trim(),
+                rounds: String(player.rounds || "7").trim(),
+                groupId: String(player.groupId || "").trim(),
+                availability: normalizePlayerAvailability(player.availability, wk),
+                note: String(player.note || "").trim()
+            };
+        }
+
+        function normalizeFirebaseData(data) {
+            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
+            if (!data || typeof data !== "object") return { activeWeek: defaultWeekKey, pool: [], weeksData: {} };
+            const activeWeek = typeof data.activeWeek === "string" && data.activeWeek ? data.activeWeek : defaultWeekKey;
+            const pool = Array.isArray(data.pool) ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean) : [];
+            return { activeWeek, pool, weeksData: data.weeksData || {} };
+        }
+
+        function applyFirebaseDataToLocal(data) {
+            const norm = normalizeFirebaseData(data);
+            state.activeWeek = norm.activeWeek;
+            state.pool = norm.pool;
+            state.weeksData = norm.weeksData;
+        }
+
+        async function transactionUpdate(mutator) {
+            if (!firebaseEnabled) {
+                const local = normalizeFirebaseData(state);
+                if (mutator(local) !== false) {
+                    applyFirebaseDataToLocal(local);
+                    render();
+                }
+                return;
+            }
+            try {
+                const ref = database.ref(FIREBASE_PATH);
+                const res = await ref.transaction(cur => {
+                    const latest = normalizeFirebaseData(cur);
+                    return mutator(latest) === false ? cur : latest;
+                });
+                if (res?.snapshot) {
+                    applyFirebaseDataToLocal(res.snapshot.val());
+                    render();
+                }
+            } catch(err) {
+                alert("資料同步失敗");
+            }
+        }
+
+        function initFirebaseListener() {
+            try {
+                if (typeof firebase !== "undefined" && !firebase.apps.length) {
+                    firebase.initializeApp(FIREBASE_CONFIG);
+                }
+                database = firebase.database();
+                firebaseEnabled = true;
+            } catch (error) {
+                firebaseEnabled = false;
+                setSyncStatus("⚠ Firebase 初始化失敗", "text-[11px] text-rose-400");
             }
 
-            const dir = poolSortState.direction === 'asc' ? 1 : -1;
+            if (!firebaseEnabled) return;
 
-            transactionUpdate(data => {
-                const groupsMap = new Map();
+            database.ref(".info/connected").on("value", snap => {
+                const isConn = snap.val() === true;
+                setSyncStatus(isConn ? "☁ 已連線到 Firebase" : "☁ Firebase 連線中...", isConn ? "text-[11px] text-emerald-400" : "text-[11px] text-amber-400");
+            });
 
-                data.pool.forEach((player, idx) => {
-                    const gId = player.groupId ? String(player.groupId).trim() : null;
-                    if (gId) {
-                        if (!groupsMap.has(gId)) {
-                            groupsMap.set(gId, []);
-                        }
-                        groupsMap.get(gId).push(player);
-                    } else {
-                        const key = `_single_${idx}_${player.id}`;
-                        groupsMap.set(key, [player]);
-                    }
-                });
-
-                const groupList = Array.from(groupsMap.values()).map(members => {
-                    let sortKey;
-                    if (field === 'level') {
-                        const levels = members.map(m => Number(getPlayerLevel(m)) || 0);
-                        sortKey = dir === 1 ? Math.min(...levels) : Math.max(...levels);
-                    } else if (field === 'job') {
-                        const jobs = members.map(m => String(m.job || ''));
-                        jobs.sort((a, b) => a.localeCompare(b, 'zh-TW'));
-                        sortKey = dir === 1 ? jobs[0] : jobs[jobs.length - 1];
-                    }
-                    return { members, sortKey };
-                });
-
-                groupList.sort((a, b) => {
-                    if (field === 'level') {
-                        return (a.sortKey - b.sortKey) * dir;
-                    } else if (field === 'job') {
-                        return String(a.sortKey).localeCompare(String(b.sortKey), 'zh-TW') * dir;
-                    }
-                    return 0;
-                });
-
-                const newPool = [];
-                groupList.forEach(group => {
-                    newPool.push(...group.members);
-                });
-
-                data.pool = newPool;
-                return true;
+            database.ref(FIREBASE_PATH).on("value", snap => {
+                applyFirebaseDataToLocal(snap.val());
+                render();
             });
         }
 
-        function getJobColorClass(job) {
-            switch (job) {
-                case "黑騎士":
-                case "聖騎士":
-                case "英雄":
-                    return "bg-rose-900/80 border-rose-500 text-rose-200 font-bold";
-                case "火毒":
-                case "冰雷":
-                case "主教":
-                    return "bg-sky-900/80 border-sky-500 text-sky-200 font-bold";
-                case "箭神":
-                case "神射手":
-                    return "bg-fuchsia-900/80 border-fuchsia-500 text-fuchsia-200 font-bold";
-                case "夜使者":
-                case "暗影神偷":
-                    return "bg-orange-900/80 border-orange-500 text-orange-200 font-bold";
-                case "槍神":
-                case "拳霸":
-                    return "bg-emerald-900/80 border-emerald-500 text-emerald-200 font-bold";
-                default:
-                    return "bg-slate-900 border-slate-800 text-slate-400";
-            }
+        function selectWeek(wk) {
+            if (!wk) return;
+            transactionUpdate(data => { data.activeWeek = wk; return true; });
         }
 
-        function getJobOptionStyle(job) {
-            switch (job) {
-                case "黑騎士": case "聖騎士": case "英雄":
-                    return "background-color: #881337; color: #fecdd3;";
-                case "火毒": case "冰雷": case "主教":
-                    return "background-color: #075985; color: #bae6fd;";
-                case "箭神": case "神射手":
-                    return "background-color: #701a75; color: #f5d0fe;";
-                case "夜使者": case "暗影神偷":
-                    return "background-color: #7c2d12; color: #ffedd5;";
-                case "槍神": case "拳霸":
-                    return "background-color: #064e3b; color: #a7f3d0;";
-                default:
-                    return "background-color: #0f172a; color: #94a3b8;";
-            }
+        function switchWeekRelative(delta) {
+            const [y, m, d] = state.activeWeek.split('-').map(Number);
+            const t = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
+            t.setDate(t.getDate() + delta * 7);
+            selectWeek(formatDateKey(t));
         }
+
+        function jumpToCurrentWeek() { selectWeek(formatDateKey(getTuesdayOfWeek())); }
+
+        function getJobColorClass(job) { return JOB_STYLE_MAP[job]?.class || DEFAULT_JOB_CLASS; }
+        function getJobOptionStyle(job) { return JOB_STYLE_MAP[job]?.style || DEFAULT_JOB_STYLE; }
 
         function renderJobSelectOptions(currentJob) {
-            let html = `<option value="" style="background-color: #0f172a; color: #94a3b8;" ${!currentJob ? "selected" : ""}>職業</option>`;
+            let html = `<option value="" style="${DEFAULT_JOB_STYLE}" ${!currentJob ? "selected" : ""}>職業</option>`;
             JOB_LIST.forEach(job => {
-                const style = getJobOptionStyle(job);
-                html += `<option value="${job}" style="${style}" ${currentJob === job ? "selected" : ""}>${job}</option>`;
+                html += `<option value="${job}" style="${getJobOptionStyle(job)}" ${currentJob === job ? "selected" : ""}>${job}</option>`;
             });
             return html;
         }
@@ -218,657 +274,145 @@
         function renderGroupSelectOptions(currentGroupId) {
             let html = `<option value="" class="bg-slate-900 text-slate-500" ${!currentGroupId ? "selected" : ""}></option>`;
             for (let i = 1; i <= 15; i++) {
-                const gid = `g${i}`;
-                html += `<option value="${gid}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === gid ? "selected" : ""}>大小號 ${i}</option>`;
+                html += `<option value="g${i}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === `g${i}` ? "selected" : ""}>大小號 ${i}</option>`;
             }
             return html;
         }
 
-        // ==================== 4. 日期與週別處理函式 ====================
-        function getTuesdayOfWeek(d = new Date()) {
-            const date = new Date(d);
-            const day = date.getDay();
-            let diffToTuesday = (day >= 2) ? (2 - day) : (2 - day - 7);
-            date.setDate(date.getDate() + diffToTuesday);
-            date.setHours(0, 0, 0, 0);
-            return date;
+        function renderAvailabilitySelects(player) {
+            const avail = getPlayerWeekAvailability(player, state.activeWeek);
+            return WEEKDAYS.map((day, i) => `
+                <div class="flex flex-col items-center">
+                    <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
+                    <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200">
+                        <option value="" ${!avail[i] ? "selected" : ""}></option>
+                        <option value="20:00~" ${avail[i] === "20:00~" ? "selected" : ""}>20:00~</option>
+                        <option value="21:00~" ${avail[i] === "21:00~" ? "selected" : ""}>21:00~</option>
+                    </select>
+                </div>
+            `).join("");
         }
 
-        function formatDateKey(date) {
-            const y = date.getFullYear();
-            const m = String(date.getMonth() + 1).padStart(2, '0');
-            const d = String(date.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        }
-
-        function getWeekDisplayTitle(weekKey) {
-            if (!weekKey) return "";
-            const parts = weekKey.split('-').map(Number);
-            if (parts.length < 3) return weekKey;
-            const start = new Date(parts[0], parts[1] - 1, parts[2]);
-            const end = new Date(start);
-            end.setDate(start.getDate() + 6);
-            
-            const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
-            const year = start.getFullYear();
-            
-            const startM = String(start.getMonth() + 1).padStart(2, '0');
-            const startD = String(start.getDate()).padStart(2, '0');
-            const startW = weekdays[start.getDay()];
-
-            const endM = end.getMonth() + 1;
-            const endD = String(end.getDate()).padStart(2, '0');
-            const endW = weekdays[end.getDay()];
-
-            const startStr = `${year} ${startM}/${startD}(${startW})`;
-            const endStr = `${endM}/${endD}(${endW})`;
-            
-            const thisTuesdayKey = formatDateKey(getTuesdayOfWeek());
-            let tag = "";
-            if (weekKey === thisTuesdayKey) {
-                tag = " (本週)";
-            } else {
-                const nextTuesday = getTuesdayOfWeek();
-                nextTuesday.setDate(nextTuesday.getDate() + 7);
-                if (weekKey === formatDateKey(nextTuesday)) {
-                    tag = " (下週)";
-                } else {
-                    const lastTuesday = getTuesdayOfWeek();
-                    lastTuesday.setDate(lastTuesday.getDate() - 7);
-                    if (weekKey === formatDateKey(lastTuesday)) {
-                        tag = " (上週)";
-                    }
-                }
-            }
-            return `${startStr} ~${endStr}${tag}`;
-        }
-
-        function makeId() {
-            return Date.now() + "-" + Math.random().toString(36).substring(2, 10);
-        }
-
-        function createDefaultWeekGroups(weekKey) {
-            const parts = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
-            const startDate = (parts.length === 3) ? new Date(parts[0], parts[1] - 1, parts[2]) : getTuesdayOfWeek();
-
-            return Array.from({ length: MAX_GROUPS }, (_, i) => {
-                const targetDate = new Date(startDate);
-                targetDate.setDate(startDate.getDate() + i);
-                const dateStr = `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
-                return {
-                    team1: [], team2: [], team3: [],
-                    time1: "20:00", time2: "20:00", time3: "20:00",
-                    date: dateStr
-                };
-            });
-        }
-
-        function createEmptyFirebaseData() {
-            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
-            return {
-                activeWeek: defaultWeekKey,
-                pool: [],
-                weeksData: {
-                    [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey) }
-                }
-            };
-        }
-
-        function setSyncStatus(text, className = "text-[11px] text-slate-500") {
-            const el = document.getElementById("sync-status");
-            if (!el) return;
-            el.className = `mt-1 ${className}`;
-            el.textContent = text;
-        }
-
-        // ==================== 5. Firebase 初始化與連線設定 ====================
-        try {
-            if (typeof firebase !== "undefined" && !firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-            database = firebase.database();
-            firebaseEnabled = true;
-        } catch (error) {
-            console.error("Firebase 初始化失敗：", error);
-            firebaseEnabled = false;
-            setSyncStatus("⚠ Firebase 初始化失敗，使用本機儲存", "text-[11px] text-rose-400");
-        }
-
-        if (firebaseEnabled) {
-            database.ref(".info/connected").on("value", snapshot => {
-                if (snapshot.val() === true) {
-                    setSyncStatus("☁ 已連線到 Firebase", "text-[11px] text-emerald-400");
-                } else {
-                    setSyncStatus("☁ Firebase 連線中...", "text-[11px] text-amber-400");
-                }
-            });
-        }
-
-        // ==================== 6. 資料正規化與狀態管理 ====================
-        function isLevel(value) {
-            return /^(?:lv\.?\s*)?\d+$/i.test(String(value || "").trim());
-        }
-
-        function normalizeLevel(value) {
-            const text = String(value || "").trim();
-            const match = text.match(/\d+/);
-            return match ? match[0] : "";
-        }
-
-        function getPlayerLevel(player) {
-            if (!player) return "";
-            const possibleFields = [
-                player.level, player.lv, player["等級"],
-                player.levelText, player.levelDisplay,
-                player.levelNumber, player.levelValue, player["等級數字"]
-            ];
-            for (const value of possibleFields) {
-                if (isLevel(value)) {
-                    const level = normalizeLevel(value);
-                    if (level) return level;
-                }
-            }
-            return "";
-        }
-
-        function normalizeAvailabilityArray(arr) {
-            const defaultArr = ["", "", "", "", "", "", ""];
-            if (!Array.isArray(arr)) return defaultArr;
-            return defaultArr.map((_, i) => typeof arr[i] === "string" ? arr[i] : "");
-        }
-
-        function normalizePlayerAvailability(availObjOrArr, activeWeekKey) {
-            if (Array.isArray(availObjOrArr)) {
-                return {
-                    [activeWeekKey]: normalizeAvailabilityArray(availObjOrArr)
-                };
-            }
-            if (availObjOrArr && typeof availObjOrArr === "object") {
-                const res = {};
-                for (const wk in availObjOrArr) {
-                    res[wk] = normalizeAvailabilityArray(availObjOrArr[wk]);
-                }
-                return res;
-            }
-            return {
-                [activeWeekKey]: ["", "", "", "", "", "", ""]
-            };
-        }
-
-        function getPlayerWeekAvailability(player, weekKey) {
-            if (!player || !player.availability) return ["", "", "", "", "", "", ""];
-            if (Array.isArray(player.availability)) {
-                return normalizeAvailabilityArray(player.availability);
-            }
-            if (typeof player.availability === "object") {
-                return normalizeAvailabilityArray(player.availability[weekKey]);
-            }
-            return ["", "", "", "", "", "", ""];
-        }
-
-        function normalizePlayer(player, activeWeekKey) {
-            if (!player || typeof player !== "object") return null;
-            const currentWeekKey = activeWeekKey || formatDateKey(getTuesdayOfWeek());
-            
-            const result = {
-                id: String(player.id || makeId()),
-                level: getPlayerLevel(player),
-                name: String(player.name || player["名稱"] || player["名字"] || "").trim(),
-                job: String(player.job || player["職業"] || "").trim(),
-                position: String(player.position || player["AD/AP"] || player["位置"] || "").trim(),
-                rounds: String(player.rounds || "7").trim(),
-                groupId: String(player.groupId || "").trim(),
-                availability: normalizePlayerAvailability(player.availability, currentWeekKey),
-                note: String(player.note || player["備註"] || "").trim()
-            };
-
-            if (!player.position && !player["AD/AP"] && !player["位置"] && result.job) {
-                const match = result.job.match(/^(.*?)\s*\((.*?)\)\s*$/);
-                if (match) {
-                    result.job = match[1].trim();
-                    result.position = match[2].trim();
-                }
-            }
-            return result;
-        }
-
-        function normalizeWeekGroupData(weekData, weekKey) {
-            if (!weekData || typeof weekData !== "object") {
-                return { groups: createDefaultWeekGroups(weekKey) };
-            }
-            let groups = Array.isArray(weekData.groups) ? weekData.groups.slice(0, MAX_GROUPS) : [];
-            const defaultGroups = createDefaultWeekGroups(weekKey);
-
-            while (groups.length < MAX_GROUPS) {
-                groups.push(defaultGroups[groups.length]);
-            }
-
-            groups = groups.map((group, idx) => {
-                if (!group || typeof group !== "object") return defaultGroups[idx];
-                return {
-                    team1: Array.isArray(group.team1) ? group.team1.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
-                    team2: Array.isArray(group.team2) ? group.team2.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
-                    team3: Array.isArray(group.team3) ? group.team3.map(p => normalizePlayer(p, weekKey)).filter(Boolean) : [],
-                    time1: typeof group.time1 === "string" && group.time1 ? group.time1 : "20:00",
-                    time2: typeof group.time2 === "string" && group.time2 ? group.time2 : "20:00",
-                    time3: typeof group.time3 === "string" && group.time3 ? group.time3 : "20:00",
-                    date: typeof group.date === "string" && group.date ? group.date : defaultGroups[idx].date
-                };
-            });
-
-            return { groups };
-        }
-
-        function normalizeFirebaseData(data) {
-            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
-
-            if (!data || typeof data !== "object") {
-                return createEmptyFirebaseData();
-            }
-
-            let activeWeek = typeof data.activeWeek === "string" && data.activeWeek ? data.activeWeek : defaultWeekKey;
-
-            let weeksData = {};
-            if (data.weeksData && typeof data.weeksData === "object") {
-                for (const wk in data.weeksData) {
-                    weeksData[wk] = normalizeWeekGroupData(data.weeksData[wk], wk);
-                }
-            } else if (Array.isArray(data.groups)) {
-                weeksData[defaultWeekKey] = normalizeWeekGroupData({ groups: data.groups }, defaultWeekKey);
-            }
-
-            if (!weeksData[activeWeek]) {
-                weeksData[activeWeek] = { groups: createDefaultWeekGroups(activeWeek) };
-            }
-
-            const pool = Array.isArray(data.pool)
-                ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean)
-                : [];
-
-            return {
-                activeWeek,
-                weeksData,
-                pool
-            };
-        }
-
-        function applyFirebaseDataToLocal(data) {
-            const normalized = normalizeFirebaseData(data);
-            state = {
-                activeWeek: normalized.activeWeek,
-                pool: normalized.pool,
-                weeksData: normalized.weeksData
-            };
-        }
-
-        function saveLocalState() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                    activeWeek: state.activeWeek,
-                    pool: state.pool,
-                    weeksData: state.weeksData
-                }));
-            } catch (error) {
-                console.error("LocalStorage 儲存失敗：", error);
-            }
-        }
-
-        function loadLocalState() {
-            try {
-                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-                applyFirebaseDataToLocal(saved);
-            } catch (error) {
-                applyFirebaseDataToLocal(null);
-            }
-            render();
-        }
-
-        async function transactionUpdate(mutator) {
-            if (!firebaseEnabled) {
-                const localData = normalizeFirebaseData({
-                    activeWeek: state.activeWeek,
-                    pool: state.pool,
-                    weeksData: state.weeksData
-                });
-                const changed = mutator(localData);
-                if (changed !== false) {
-                    applyFirebaseDataToLocal(localData);
-                    saveLocalState();
-                    render();
-                }
-                return;
-            }
-
-            try {
-                const ref = database.ref(FIREBASE_PATH);
-                const result = await ref.transaction(currentData => {
-                    if (currentData === null) {
-                        const fresh = createEmptyFirebaseData();
-                        const changed = mutator(fresh);
-                        return changed === false ? null : fresh;
-                    }
-
-                    const latest = normalizeFirebaseData(currentData);
-                    const changed = mutator(latest);
-                    return changed === false ? currentData : latest;
-                });
-
-                if (result && result.snapshot) {
-                    applyFirebaseDataToLocal(result.snapshot.val());
-                    render();
-                }
-            } catch (error) {
-                console.error("Firebase transaction 失敗：", error);
-                alert("資料同步失敗，請確認 Firebase 連線。");
-            }
-        }
-
-        function initFirebaseListener() {
-            if (!firebaseEnabled) {
-                loadLocalState();
-                return;
-            }
-
-            database.ref(FIREBASE_PATH).on("value", snapshot => {
-                applyFirebaseDataToLocal(snapshot.val());
-                render();
-            }, error => {
-                console.error("Firebase 讀取失敗：", error);
-                setSyncStatus("⚠ Firebase 讀取失敗", "text-[11px] text-rose-400");
-            });
-
-            database.ref(FIREBASE_PATH).transaction(currentData => {
-                return currentData === null ? createEmptyFirebaseData() : currentData;
-            }).catch(error => {
-                console.error("Firebase 初始化資料失敗：", error);
-            });
-        }
-
-        // ==================== 7. 互動事件處理函式 ====================
-        function getAvailableWeekKeys() {
-            const keysSet = new Set(Object.keys(state.weeksData || {}));
-            const baseTue = getTuesdayOfWeek();
-            for (let offset = -1; offset <= 2; offset++) {
-                const d = new Date(baseTue);
-                d.setDate(d.getDate() + offset * 7);
-                keysSet.add(formatDateKey(d));
-            }
-            return Array.from(keysSet).sort();
-        }
-
-        function selectWeek(weekKey) {
-            if (!weekKey) return;
+        function updatePlayerField(id, field, val) {
+            const norm = field === "level" ? normalizeLevel(val) : String(val);
             transactionUpdate(data => {
-                data.activeWeek = weekKey;
-                if (!data.weeksData) data.weeksData = {};
-                if (!data.weeksData[weekKey]) {
-                    data.weeksData[weekKey] = { groups: createDefaultWeekGroups(weekKey) };
-                }
+                const p = data.pool.find(item => String(item.id) === String(id));
+                if (p) p[field] = norm;
                 return true;
             });
         }
 
-        function switchWeekRelative(delta) {
-            const parts = state.activeWeek.split('-').map(Number);
-            const currTue = (parts.length === 3) ? new Date(parts[0], parts[1] - 1, parts[2]) : getTuesdayOfWeek();
-            currTue.setDate(currTue.getDate() + delta * 7);
-            const targetKey = formatDateKey(currTue);
-            selectWeek(targetKey);
-        }
-
-        function jumpToCurrentWeek() {
-            const thisTueKey = formatDateKey(getTuesdayOfWeek());
-            selectWeek(thisTueKey);
-        }
-
-        function updatePlayerField(playerId, field, value) {
-            const normalizedValue = field === "level" ? normalizeLevel(value) : String(value || "");
-
+        function updatePlayerAvailability(id, dayIdx, val) {
+            const wk = state.activeWeek;
             transactionUpdate(data => {
-                const poolPlayer = data.pool.find(p => String(p.id) === String(playerId));
-                if (poolPlayer) {
-                    poolPlayer[field] = normalizedValue;
+                const p = data.pool.find(item => String(item.id) === String(id));
+                if (p) {
+                    if (!p.availability || Array.isArray(p.availability)) p.availability = { [wk]: ["", "", "", "", "", "", ""] };
+                    if (!p.availability[wk]) p.availability[wk] = ["", "", "", "", "", "", ""];
+                    p.availability[wk][dayIdx] = String(val);
                 }
-                return true;
-            });
-        }
-
-        function updatePlayerAvailability(playerId, dayIndex, value) {
-            const currentWeekKey = state.activeWeek;
-            transactionUpdate(data => {
-                const updateTarget = (p) => {
-                    if (!p.availability) p.availability = {};
-                    if (Array.isArray(p.availability)) {
-                        p.availability = { [currentWeekKey]: [...p.availability] };
-                    }
-                    if (!p.availability[currentWeekKey]) {
-                        p.availability[currentWeekKey] = ["", "", "", "", "", "", ""];
-                    }
-                    p.availability[currentWeekKey][dayIndex] = String(value || "");
-                };
-
-                const poolPlayer = data.pool.find(p => String(p.id) === String(playerId));
-                if (poolPlayer) updateTarget(poolPlayer);
                 return true;
             });
         }
 
         function addEmptyPoolPlayer() {
-            const currentWeekKey = state.activeWeek;
-            const newPlayer = {
-                id: makeId(),
-                level: "",
-                name: "",
-                job: "",
-                position: "",
-                rounds: "7",
-                groupId: "",
-                availability: {
-                    [currentWeekKey]: ["", "", "", "", "", "", ""]
-                },
-                note: ""
-            };
-
             transactionUpdate(data => {
-                data.pool.push(newPlayer);
+                data.pool.push({
+                    id: makeId(), level: "", name: "", job: "", position: "", rounds: "7", groupId: "",
+                    availability: { [state.activeWeek]: ["", "", "", "", "", "", ""] }, note: ""
+                });
                 return true;
             });
         }
 
-        function deletePoolPlayer(playerId) {
-            const player = state.pool.find(p => String(p.id) === String(playerId));
-            if (!player) return;
-            const name = player.name || "未命名玩家";
-            if (!confirm(`確定要刪除「${name}」嗎？`)) return;
-
+        function deletePoolPlayer(id) {
+            if (!confirm("確定要刪除此成員嗎？")) return;
             transactionUpdate(data => {
-                data.pool = data.pool.filter(item => String(item.id) !== String(playerId));
+                data.pool = data.pool.filter(p => String(p.id) !== String(id));
                 return true;
             });
         }
 
-        // ==================== 8. UI 渲染函式 ====================
-        function escapeHtml(value) {
-            return String(value ?? "")
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#039;");
+        function sortPoolBy(field) {
+            if (poolSortState.field === field) {
+                poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                poolSortState.field = field;
+                poolSortState.direction = field === 'level' ? 'desc' : 'asc';
+            }
+            const dir = poolSortState.direction === 'asc' ? 1 : -1;
+            state.pool.sort((a, b) => {
+                if (field === 'level') return (Number(getPlayerLevel(b)) - Number(getPlayerLevel(a))) * dir;
+                if (field === 'job') return String(a.job || '').localeCompare(String(b.job || ''), 'zh-TW') * dir;
+                return 0;
+            });
+            render();
         }
 
-        function renderAvailabilitySelects(player) {
-            const availArr = getPlayerWeekAvailability(player, state.activeWeek);
-            return WEEKDAYS.map((day, i) => {
-                const val = availArr[i] || "";
-                return `
-                    <div class="flex flex-col items-center">
-                        <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
-                        <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none">
-                            <option value="" ${val === "" ? "selected" : ""}></option>
-                            <option value="20:00~" ${val === "20:00~" ? "selected" : ""}>20:00~</option>
-                            <option value="21:00~" ${val === "21:00~" ? "selected" : ""}>21:00~</option>
-                        </select>
-                    </div>
-                `;
-            }).join("");
+        function getAvailableWeekKeys() {
+            const set = new Set(Object.keys(state.weeksData || {}));
+            const base = getTuesdayOfWeek();
+            for (let i = -1; i <= 2; i++) {
+                const d = new Date(base); d.setDate(d.getDate() + i * 7);
+                set.add(formatDateKey(d));
+            }
+            return Array.from(set).sort();
         }
 
-        function renderPool() {
-            const displayPool = state.pool;
+        function render() {
+            const weekKeys = getAvailableWeekKeys();
+            document.getElementById("week-select").innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
 
-            const getSortIcon = (field) => {
-                if (poolSortState.field !== field) return '↕️';
-                return poolSortState.direction === 'asc' ? '▲' : '▼';
-            };
+            const getIcon = f => poolSortState.field !== f ? '↕️' : (poolSortState.direction === 'asc' ? '▲' : '▼');
 
             let html = `
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                        <div class="flex items-center gap-3 flex-wrap">
-                            <h2 class="flex items-center gap-2 text-lg font-bold text-slate-200"><span>👥</span>名單</h2>
-                        </div>
+                    <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
+                        <h2 class="text-lg font-bold text-slate-200">👥 總名單成員 (${state.pool.length}人)</h2>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <div class="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-800 text-xs">
-                                <span class="text-slate-400 px-1 font-medium">排序：</span>
-                                <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 transition">
-                                    等級 ${getSortIcon('level')}
-                                </button>
-                                <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 transition">
-                                    職業 ${getSortIcon('job')}
-                                </button>
-                            </div>
-
-                            <button onclick="addEmptyPoolPlayer()" class="rounded-lg border border-blue-600/50 bg-blue-600/20 px-2.5 py-1 text-xs font-semibold text-blue-300 hover:bg-blue-600/40 transition">➕ 新增成員</button>
-                            <span class="rounded-full bg-blue-950 px-2.5 py-1 text-xs font-semibold text-blue-400">
-                                ${state.pool.length} 人
-                            </span>
+                            <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">等級 ${getIcon('level')}</button>
+                            <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">職業 ${getIcon('job')}</button>
+                            <button onclick="addEmptyPoolPlayer()" class="rounded border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs font-bold text-blue-300">➕ 新增自己</button>
                         </div>
                     </div>
-                    <div id="pool-list-master" data-list-type="pool" class="sortable-list flex min-h-[100px] flex-col gap-2">
+                    <div class="flex flex-col gap-2">
             `;
 
-            if (displayPool.length === 0) {
-                html += `<p class="empty-msg py-6 text-center text-sm text-slate-500">目前總名單為空，可點擊上方按鈕手動新增成員。</p>`;
+            if (state.pool.length === 0) {
+                html += `<p class="text-center text-sm text-slate-500 py-6">目前尚無成員，請點擊上方「➕ 新增自己」按鈕填寫資料。</p>`;
             } else {
-                displayPool.forEach((player, index) => {
-                    const level = getPlayerLevel(player);
-                    const jobColorClass = getJobColorClass(player.job);
-                    const roundsVal = player.rounds || "7";
-                    
+                state.pool.forEach((player, idx) => {
                     html += `
-                        <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm transition hover:border-slate-700">
+                        <div class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm flex-wrap gap-2">
                             <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-                                <span class="text-xs font-semibold text-slate-500 select-none">#${index + 1}</span>
-                                <div class="flex items-center">
-                                    <span class="text-xs text-slate-500 select-none">Lv.</span>
-                                    <input type="text" value="${escapeHtml(level)}" placeholder="-" maxlength="3" inputmode="numeric" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs font-semibold text-blue-400 focus:border-blue-500 focus:outline-none" title="點擊修改等級">
-                                </div>
-                                <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-20 rounded border px-1 py-0.5 text-xs transition-colors focus:border-blue-500 focus:outline-none ${jobColorClass}" title="選擇職業">
+                                <span class="text-xs text-slate-500">#${idx + 1}</span>
+                                <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" placeholder="等級" class="w-12 rounded border border-slate-800 bg-slate-900 px-1 py-1 text-center text-xs text-blue-400">
+                                <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-24 rounded border px-1 py-1 text-xs ${getJobColorClass(player.job)}">
                                     ${renderJobSelectOptions(player.job)}
                                 </select>
-                                <input type="text" value="${escapeHtml(player.name)}" placeholder="名字" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs font-bold text-slate-200 focus:border-blue-500 focus:outline-none" title="點擊修改名字">
-                                <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300 focus:border-blue-500 focus:outline-none" title="點擊修改 AD/AP">
-                                
-                                <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800/80">
-                                    ${renderAvailabilitySelects(player)}
-                                </div>
-
-                                <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 focus:border-blue-500 focus:outline-none" title="選擇場次">
-                                    <option value="7" ${roundsVal === "7" ? "selected" : ""}>7場</option>
-                                    <option value="14" ${roundsVal === "14" ? "selected" : ""}>14場</option>
+                                <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" placeholder="遊戲名字" class="w-24 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-200 font-bold">
+                                <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-300">
+                                <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
+                                <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-1 text-xs text-slate-200">
+                                    <option value="7" ${player.rounds === "7" ? "selected" : ""}>7場</option>
+                                    <option value="14" ${player.rounds === "14" ? "selected" : ""}>14場</option>
                                 </select>
-
-                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-22 rounded border border-amber-900/80 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300 focus:border-amber-500 focus:outline-none" title="選擇同綁定編號者將會一起排序">
+                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-24 rounded border border-amber-900 bg-amber-950/40 px-1 py-1 text-xs text-amber-300">
                                     ${renderGroupSelectOptions(player.groupId)}
                                 </select>
-
-                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-40 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400 focus:border-blue-500 focus:outline-none" title="點擊修改備註">
+                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-1.5 py-1 text-xs text-slate-400">
                             </div>
-                            <div class="flex items-center gap-1 shrink-0 ml-2">
-                                <button onclick="deletePoolPlayer('${player.id}')" title="從總名單刪除此成員" class="ml-1 rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950 transition">✕</button>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950">刪除</button>
                             </div>
                         </div>
                     `;
                 });
             }
-
             html += `</div></div>`;
-            return html;
+            document.getElementById("master-view-container").innerHTML = html;
         }
 
-        // ==================== 9. SortableJS 拖曳互動設定 ====================
-        function initSortables() {
-            sortableInstances.forEach(instance => instance.destroy());
-            sortableInstances = [];
-
-            document.querySelectorAll(".sortable-list").forEach(el => {
-                const instance = new Sortable(el, {
-                    group: "artale-master-list",
-                    draggable: ".drag-item",
-                    animation: 150,
-                    filter: "input, button, select",
-                    preventOnFilter: false,
-                    ghostClass: "sortable-ghost",
-                    dragClass: "sortable-drag",
-                    onEnd: function(evt) {
-                        const itemId = evt.item && evt.item.dataset ? evt.item.dataset.id : "";
-                        const newIndex = typeof evt.newDraggableIndex === "number" ? evt.newDraggableIndex : evt.newIndex;
-
-                        if (!itemId || typeof newIndex !== "number") return;
-                        if (evt.oldDraggableIndex === evt.newDraggableIndex) return;
-
-                        transactionUpdate(data => {
-                            const poolPlayer = data.pool.find(p => String(p.id) === String(itemId));
-                            if (!poolPlayer) return false;
-
-                            let groupMembers = [poolPlayer];
-                            if (poolPlayer.groupId) {
-                                const bound = data.pool.filter(p => p.groupId === poolPlayer.groupId);
-                                if (bound.length > 1) {
-                                    groupMembers = bound;
-                                }
-                            }
-
-                            const memberIds = new Set(groupMembers.map(p => String(p.id)));
-                            const remainingPool = data.pool.filter(p => !memberIds.has(String(p.id)));
-
-                            let targetIdx = newIndex;
-                            if (targetIdx < 0) targetIdx = 0;
-                            remainingPool.splice(targetIdx, 0, ...groupMembers);
-                            data.pool = remainingPool;
-                            return true;
-                        });
-                    }
-                });
-
-                sortableInstances.push(instance);
-            });
-        }
-
-        // ==================== 10. 主畫面渲染與初始化入口 ====================
-        function render() {
-            const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
-            state = state || {
-                activeWeek: defaultWeekKey,
-                pool: [],
-                weeksData: {}
-            };
-
-            const weekSelect = document.getElementById("week-select");
-            if (weekSelect) {
-                const weekKeys = getAvailableWeekKeys();
-                weekSelect.innerHTML = weekKeys.map(wk => {
-                    const title = getWeekDisplayTitle(wk);
-                    return `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${title}</option>`;
-                }).join("");
-            }
-
-            document.getElementById("master-view-container").innerHTML = renderPool();
-            initSortables();
-        }
-
-        // 啟動程式
         initFirebaseListener();
     </script>
 </body>
