@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artale 隊伍分配 - 人員填寫名單</title>
+    <title>Artale 總名單</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
     <style>
@@ -41,11 +40,11 @@
     <div class="mx-auto max-w-7xl">
         <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
-            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 隊伍分配 - 填寫名單</h1>
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 總名單</h1>
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
-        <!-- 週別切換區塊 (已隱藏/移除刪除週別按鈕) -->
+        <!-- 週別切換區塊 (已移除刪除此週按鈕) -->
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/90 p-4 shadow-md">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-bold text-slate-300">📅 切換週別：</span>
@@ -55,11 +54,20 @@
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
             </div>
             <div class="text-xs text-slate-400">
-                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間與隊伍分配</span>按週獨立。
+                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留。
             </div>
         </div>
 
-        <!-- 主內容區：僅保留總名單 -->
+        <!-- 總名單標題列 -->
+        <div class="mb-6 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/90 px-5 py-3 shadow-md">
+            <div class="flex items-center gap-2">
+                <span class="text-base">📋</span>
+                <span class="text-sm font-bold text-slate-200">總名單</span>
+                <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
+            </div>
+        </div>
+
+        <!-- 主內容區：僅留總名單 -->
         <main class="space-y-6">
             <div id="tab-content-master" class="space-y-6">
                 <div id="master-view-container"></div>
@@ -87,10 +95,7 @@
 
         const FIREBASE_PATH = "artale_party_state_v3";
         const STORAGE_KEY = "artale_party_local_v3";
-        const MAX_GROUPS = 7;
-        const GROUP_NAMES = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
-        const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
         
         const JOB_LIST = ["黑騎士", "英雄", "聖騎士", "火毒", "冰雷", "主教", "箭神", "神射手", "夜使者", "暗影神偷", "槍神", "拳霸"];
 
@@ -118,16 +123,12 @@
         let database = null;
         let firebaseEnabled = false;
         let sortableInstances = [];
-        let currentTab = "master";
         let poolSortState = { field: null, direction: 'desc' };
         let poolJobFilters = [];
         let poolTagFilter = "all";
 
         let state = {
             activeWeek: formatDateKey(getTuesdayOfWeek()),
-            activeGroup: 0,
-            activeGroup2: 0,
-            filterAvailableOnly: true,
             pool: [],
             weeksData: {}
         };
@@ -213,30 +214,12 @@
         // ==========================================
         // 4. 預設資料結構產生器 (Default Generators)
         // ==========================================
-        function createDefaultTeams() {
-            return [
-                { name: "第1隊", emoji: "⚔️", time: "20:00", con: false, members: [] },
-                { name: "第2隊", emoji: "⚔️", time: "20:00", con: false, members: [] },
-                { name: "第3隊", emoji: "⚔️", time: "20:00", con: false, members: [] }
-            ];
-        }
-
-        function createDefaultWeekGroups(weekKey) {
-            const [y, m, d] = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
-            const startDate = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
-            return Array.from({ length: MAX_GROUPS }, (_, i) => {
-                const targetDate = new Date(startDate);
-                targetDate.setDate(startDate.getDate() + i);
-                return { teams: createDefaultTeams(), date: `${targetDate.getMonth() + 1}/${targetDate.getDate()}` };
-            });
-        }
-
         function createEmptyFirebaseData() {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
             return { 
                 activeWeek: defaultWeekKey, 
                 pool: [], 
-                weeksData: { [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey), groups2: createDefaultWeekGroups(defaultWeekKey) } } 
+                weeksData: { [defaultWeekKey]: {} } 
             };
         }
 
@@ -283,34 +266,6 @@
             };
         }
 
-        function normalizeGroupsData(rawGroups, wk) {
-            let groups = Array.isArray(rawGroups) ? rawGroups.slice(0, MAX_GROUPS) : [];
-            const defGroups = createDefaultWeekGroups(wk);
-            
-            while (groups.length < MAX_GROUPS) {
-                groups.push(defGroups[groups.length]);
-            }
-
-            return groups.map((g, idx) => {
-                const teams = Array.isArray(g?.teams) ? g.teams.map((t, tIdx) => ({
-                    name: t.name || `第${tIdx + 1}隊`,
-                    emoji: t.emoji || "⚔️",
-                    time: t.time || "20:00",
-                    con: Boolean(t.con),
-                    members: Array.isArray(t.members) ? t.members.map(p => normalizePlayer(p, wk)).filter(Boolean) : []
-                })) : createDefaultTeams();
-                
-                return { teams, date: typeof g?.date === "string" && g.date ? g.date : defGroups[idx].date };
-            });
-        }
-
-        function normalizeWeekGroupData(weekData, wk) {
-            return {
-                groups: normalizeGroupsData(weekData?.groups, wk),
-                groups2: normalizeGroupsData(weekData?.groups2 || weekData?.groups, wk)
-            };
-        }
-
         function normalizeFirebaseData(data) {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
             if (!data || typeof data !== "object") return createEmptyFirebaseData();
@@ -320,11 +275,11 @@
             
             if (data.weeksData && typeof data.weeksData === "object") {
                 for (const wk in data.weeksData) {
-                    weeksData[wk] = normalizeWeekGroupData(data.weeksData[wk], wk);
+                    weeksData[wk] = {};
                 }
             }
             if (!weeksData[activeWeek]) {
-                weeksData[activeWeek] = { groups: createDefaultWeekGroups(activeWeek), groups2: createDefaultWeekGroups(activeWeek) };
+                weeksData[activeWeek] = {};
             }
             
             const pool = Array.isArray(data.pool) ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean) : [];
@@ -335,16 +290,9 @@
             const norm = normalizeFirebaseData(data);
             state = {
                 activeWeek: norm.activeWeek,
-                activeGroup: Math.min(Math.max(state.activeGroup || 0, 0), MAX_GROUPS - 1),
-                activeGroup2: Math.min(Math.max(state.activeGroup2 || 0, 0), MAX_GROUPS - 1),
-                filterAvailableOnly: typeof state.filterAvailableOnly === "boolean" ? state.filterAvailableOnly : true,
                 pool: norm.pool,
                 weeksData: norm.weeksData
             };
-        }
-
-        function currentWeekData() { 
-            return state.weeksData[state.activeWeek] || { groups: createDefaultWeekGroups(state.activeWeek), groups2: createDefaultWeekGroups(state.activeWeek) }; 
         }
 
         // ==========================================
@@ -421,51 +369,8 @@
         }
 
         // ==========================================
-        // 7. 商業邏輯與事件 (Logic & UI Handlers)
+        // 7. 商業邏輯運算 (Business Logic)
         // ==========================================
-        function getAvailableWeekKeys() {
-            const set = new Set(Object.keys(state.weeksData || {}));
-            const base = getTuesdayOfWeek();
-            for (let i = -1; i <= 2; i++) {
-                const d = new Date(base); 
-                d.setDate(d.getDate() + i * 7);
-                set.add(formatDateKey(d));
-            }
-            return Array.from(set).sort();
-        }
-
-        function selectWeek(wk) {
-            if (!wk) return;
-            transactionUpdate(data => {
-                data.activeWeek = wk;
-                if (!data.weeksData[wk]) data.weeksData[wk] = { groups: createDefaultWeekGroups(wk), groups2: createDefaultWeekGroups(wk) };
-                return true;
-            });
-        }
-
-        function switchWeekRelative(delta) {
-            const [y, m, d] = state.activeWeek.split('-').map(Number);
-            const t = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
-            t.setDate(t.getDate() + delta * 7);
-            selectWeek(formatDateKey(t));
-        }
-
-        function jumpToCurrentWeek() { 
-            selectWeek(formatDateKey(getTuesdayOfWeek())); 
-        }
-
-        function toggleJobFilter(job) {
-            const idx = poolJobFilters.indexOf(job);
-            if (idx > -1) poolJobFilters.splice(idx, 1);
-            else poolJobFilters.push(job);
-            render();
-        }
-
-        function clearAllJobFilters() {
-            poolJobFilters = [];
-            render();
-        }
-
         function sortPoolBy(field) {
             if (poolSortState.field === field) {
                 poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
@@ -515,26 +420,65 @@
             });
         }
 
+        // ==========================================
+        // 8. 介面事件處理與動作 (UI Event Handlers)
+        // ==========================================
+        function toggleJobFilter(job) {
+            const idx = poolJobFilters.indexOf(job);
+            if (idx > -1) {
+                poolJobFilters.splice(idx, 1);
+            } else {
+                poolJobFilters.push(job);
+            }
+            render();
+        }
+
+        function clearAllJobFilters() {
+            poolJobFilters = [];
+            render();
+        }
+
+        function setPoolTagFilter(val) {
+            poolTagFilter = val;
+            render();
+        }
+
+        function getAvailableWeekKeys() {
+            const set = new Set(Object.keys(state.weeksData || {}));
+            const base = getTuesdayOfWeek();
+            for (let i = -1; i <= 2; i++) {
+                const d = new Date(base); 
+                d.setDate(d.getDate() + i * 7);
+                set.add(formatDateKey(d));
+            }
+            return Array.from(set).sort();
+        }
+
+        function selectWeek(wk) {
+            if (!wk) return;
+            transactionUpdate(data => {
+                data.activeWeek = wk;
+                if (!data.weeksData[wk]) data.weeksData[wk] = {};
+                return true;
+            });
+        }
+
+        function switchWeekRelative(delta) {
+            const [y, m, d] = state.activeWeek.split('-').map(Number);
+            const t = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
+            t.setDate(t.getDate() + delta * 7);
+            selectWeek(formatDateKey(t));
+        }
+
+        function jumpToCurrentWeek() { 
+            selectWeek(formatDateKey(getTuesdayOfWeek())); 
+        }
+
         function updatePlayerField(id, field, val) {
             const norm = field === "level" ? normalizeLevel(val) : String(val);
             transactionUpdate(data => {
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) p[field] = norm;
-                
-                for (const wk in data.weeksData) {
-                    const checkGs = (gs) => {
-                        if (!gs) return;
-                        gs.forEach(g => {
-                            (g.teams || []).forEach(t => {
-                                (t.members || []).forEach(m => { 
-                                    if (String(m.id) === String(id)) m[field] = norm; 
-                                });
-                            });
-                        });
-                    };
-                    checkGs(data.weeksData[wk].groups);
-                    checkGs(data.weeksData[wk].groups2);
-                }
                 return true;
             });
         }
@@ -543,21 +487,6 @@
             transactionUpdate(data => {
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) p[tagField] = Boolean(checked);
-                
-                for (const wk in data.weeksData) {
-                    const checkGs = (gs) => {
-                        if (!gs) return;
-                        gs.forEach(g => {
-                            (g.teams || []).forEach(t => {
-                                (t.members || []).forEach(m => { 
-                                    if (String(m.id) === String(id)) m[tagField] = Boolean(checked); 
-                                });
-                            });
-                        });
-                    };
-                    checkGs(data.weeksData[wk].groups);
-                    checkGs(data.weeksData[wk].groups2);
-                }
                 return true;
             });
         }
@@ -573,21 +502,6 @@
                 
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) update(p);
-                
-                for (const w in data.weeksData) {
-                    const checkGs = (gs) => {
-                        if (!gs) return;
-                        gs.forEach(g => {
-                            (g.teams || []).forEach(t => {
-                                (t.members || []).forEach(m => { 
-                                    if (String(m.id) === String(id)) update(m); 
-                                });
-                            });
-                        });
-                    };
-                    checkGs(data.weeksData[w].groups);
-                    checkGs(data.weeksData[w].groups2);
-                }
                 return true;
             });
         }
@@ -607,24 +521,12 @@
             if (!confirm("確定要刪除此成員嗎？")) return;
             transactionUpdate(data => {
                 data.pool = data.pool.filter(p => String(p.id) !== String(id));
-                for (const wk in data.weeksData) {
-                    const cleanGs = (gs) => {
-                        if (!gs) return;
-                        gs.forEach(g => {
-                            (g.teams || []).forEach(t => { 
-                                t.members = (t.members || []).filter(m => String(m.id) !== String(id)); 
-                            });
-                        });
-                    };
-                    cleanGs(data.weeksData[wk].groups);
-                    cleanGs(data.weeksData[wk].groups2);
-                }
                 return true;
             });
         }
 
         // ==========================================
-        // 8. 視圖渲染與 HTML 生成 (DOM Rendering)
+        // 9. 視圖渲染與 HTML 生成 (DOM Rendering)
         // ==========================================
         function getJobColorClass(job) {
             return JOB_STYLE_MAP[job]?.class || DEFAULT_JOB_CLASS;
@@ -682,33 +584,41 @@
 
             const getIcon = f => poolSortState.field !== f ? '↕️' : (poolSortState.direction === 'asc' ? '▲' : '▼');
 
-            let jobCheckboxesHtml = `
-                <div class="flex flex-wrap items-center gap-1.5 bg-slate-950 p-2 rounded-lg border border-slate-800 mb-2">
-                    <span class="text-xs text-slate-400 mr-1 font-semibold">職業篩選：</span>
-                    <button onclick="clearAllJobFilters()" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition mr-1">清除職業</button>
+            let filterBarHtml = `
+                <div class="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 mb-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-xs text-slate-400 mr-1 font-semibold">標籤篩選：</span>
+                        <button onclick="setPoolTagFilter('all')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'all' ? 'bg-blue-600 border-blue-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">全部</button>
+                        <button onclick="setPoolTagFilter('treeKing')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'treeKing' ? 'bg-emerald-600 border-emerald-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-emerald-400 hover:border-slate-700'}">樹王</button>
+                        <button onclick="setPoolTagFilter('dragonKing')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'dragonKing' ? 'bg-amber-600 border-amber-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-amber-400 hover:border-slate-700'}">龍王</button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-900 pt-2">
+                        <span class="text-xs text-slate-400 mr-1 font-semibold">職業篩選：</span>
+                        <button onclick="clearAllJobFilters()" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition mr-1">清除職業</button>
             `;
             JOB_LIST.forEach(j => {
                 const isChecked = poolJobFilters.includes(j);
-                jobCheckboxesHtml += `
-                    <label class="flex items-center gap-1 text-xs px-2 py-1 rounded cursor-pointer border transition ${isChecked ? 'bg-blue-600/30 border-blue-500 text-blue-200' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">
+                filterBarHtml += `
+                    <label class="flex items-center gap-1 text-xs px-2 py-0.5 rounded cursor-pointer border transition ${isChecked ? 'bg-blue-600/30 border-blue-500 text-blue-200' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">
                         <input type="checkbox" value="${j}" ${isChecked ? 'checked' : ''} onchange="toggleJobFilter('${j}')" class="hidden">
                         ${j}
                     </label>
                 `;
             });
-            jobCheckboxesHtml += `</div>`;
+            filterBarHtml += `</div></div>`;
 
             let html = `
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
                     <div class="mb-3 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                        <h2 class="text-lg font-bold text-slate-200">👥 總名單 (${displayPool.length}人)</h2>
+                        <h2 class="text-lg font-bold text-slate-200">👥 成員清單</h2>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">等級 ${getIcon('level')}</button>
                             <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">職業 ${getIcon('job')}</button>
                             <button onclick="addEmptyPoolPlayer()" class="rounded border border-blue-600 bg-blue-600/20 px-2.5 py-1 text-xs text-blue-300">➕ 新增成員</button>
                         </div>
                     </div>
-                    ${jobCheckboxesHtml}
+                    ${filterBarHtml}
                     <div id="pool-list-master" data-list-type="pool" class="sortable-list flex flex-col gap-2 min-h-[80px]">
             `;
 
@@ -764,16 +674,16 @@
             return html;
         }
 
-        // Sortable.js 初始化
+        // ==========================================
+        // 10. 拖曳元件初始化 (Sortable.js)
+        // ==========================================
         function initSortables() {
             sortableInstances.forEach(i => i.destroy());
             sortableInstances = [];
             
             document.querySelectorAll(".sortable-list").forEach(el => {
-                if (el.closest(".hidden")) return;
-                
                 const inst = new Sortable(el, {
-                    group: { name: "artale-shared-lists", pull: true },
+                    group: "artale-shared-lists",
                     draggable: ".drag-item",
                     animation: 150,
                     filter: "input, button, select",
@@ -783,11 +693,13 @@
                     onEnd: function(evt) {
                         const itemId = evt.item?.dataset?.id;
                         const newIndex = evt.newDraggableIndex ?? evt.newIndex;
+                        
                         if (!itemId || evt.oldDraggableIndex === newIndex) return;
 
                         transactionUpdate(data => {
                             const p = data.pool.find(item => String(item.id) === String(itemId));
                             if (!p) return false;
+                            
                             data.pool = data.pool.filter(item => String(item.id) !== String(itemId));
                             data.pool.splice(newIndex, 0, p);
                             return true;
@@ -798,18 +710,20 @@
             });
         }
 
-        // 主渲染入口
+        // ==========================================
+        // 11. 主渲染進入點 (Main Render Routine)
+        // ==========================================
         function render() {
             const weekKeys = getAvailableWeekKeys();
             document.getElementById("week-select").innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
             
+            document.getElementById("master-tab-badge").innerText = `${state.pool.length}人`;
             document.getElementById("master-view-container").innerHTML = renderPool();
+
             initSortables();
         }
 
-        window.addEventListener("DOMContentLoaded", () => {
-            initFirebaseListener();
-        });
+        initFirebaseListener();
     </script>
 </body>
 </html>
