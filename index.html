@@ -546,7 +546,7 @@
 
         function renderGroupSelectOptions(currentGroupId) {
             let html = `<option value="" class="bg-slate-900 text-slate-500" ${!currentGroupId ? "selected" : ""}></option>`;
-            for (let i = 1; i <= 15; i++) {
+            for (let i = 1; i <= 50; i++) {
                 html += `<option value="g${i}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === `g${i}` ? "selected" : ""}>大小號 ${i}</option>`;
             }
             return html;
@@ -661,7 +661,7 @@
                                     </label>
                                 </div>
 
-                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
+                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-35 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
                             </div>
                             <div class="flex items-center gap-1 shrink-0 ml-2">
                                 <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
