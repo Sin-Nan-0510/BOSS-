@@ -44,7 +44,7 @@
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
-        <!-- 週別切換區塊 (已移除刪除此週按鈕) -->
+        <!-- 週別切換區塊 (已刪除刪除此週按鈕) -->
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/90 p-4 shadow-md">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-bold text-slate-300">📅 切換週別：</span>
@@ -58,17 +58,16 @@
             </div>
         </div>
 
-        <!-- 總名單標題列 -->
-        <div class="mb-6 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/90 px-5 py-3 shadow-md">
-            <div class="flex items-center gap-2">
-                <span class="text-base">📋</span>
-                <span class="text-sm font-bold text-slate-200">總名單</span>
-                <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
-            </div>
+        <!-- 分頁切換區塊 (只留總名單) -->
+        <div class="mb-6 grid grid-cols-1 gap-2 rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-md">
+            <button id="tab-btn-master" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold bg-blue-600 text-white shadow-md transition-all duration-200">
+                <span>📋</span> 總名單 <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
+            </button>
         </div>
 
-        <!-- 主內容區：僅留總名單 -->
+        <!-- 主內容區 -->
         <main class="space-y-6">
+            <!-- 總名單頁面 -->
             <div id="tab-content-master" class="space-y-6">
                 <div id="master-view-container"></div>
             </div>
@@ -275,7 +274,7 @@
             
             if (data.weeksData && typeof data.weeksData === "object") {
                 for (const wk in data.weeksData) {
-                    weeksData[wk] = {};
+                    weeksData[wk] = data.weeksData[wk] || {};
                 }
             }
             if (!weeksData[activeWeek]) {
@@ -544,10 +543,25 @@
             return html;
         }
 
-        function renderGroupSelectOptions(currentGroupId) {
-            let html = `<option value="" class="bg-slate-900 text-slate-500" ${!currentGroupId ? "selected" : ""}></option>`;
+        function renderGroupSelectOptions(currentGroupId, currentPlayerId) {
+            const usedGroupMap = new Map();
+            if (state.pool && Array.isArray(state.pool)) {
+                state.pool.forEach(p => {
+                    if (p.groupId && String(p.id) !== String(currentPlayerId)) {
+                        usedGroupMap.set(String(p.groupId).trim(), p.name || '未命名');
+                    }
+                });
+            }
+
+            let html = `<option value="" class="bg-slate-900 text-slate-500" ${!currentGroupId ? "selected" : ""}>選擇大小號</option>`;
             for (let i = 1; i <= 50; i++) {
-                html += `<option value="g${i}" class="bg-slate-900 text-amber-400 font-bold" ${currentGroupId === `g${i}` ? "selected" : ""}>大小號 ${i}</option>`;
+                const gKey = `g${i}`;
+                const isUsed = usedGroupMap.has(gKey);
+                const usedByName = isUsed ? usedGroupMap.get(gKey) : '';
+                const label = isUsed ? `大小號 ${i} (已使用${usedByName ? ': ' + usedByName : ''})` : `大小號 ${i}`;
+                const optionClass = isUsed ? "bg-slate-900 text-slate-500 italic" : "bg-slate-900 text-amber-400 font-bold";
+                
+                html += `<option value="${gKey}" class="${optionClass}" ${currentGroupId === gKey ? "selected" : ""}>${label}</option>`;
             }
             return html;
         }
@@ -611,7 +625,7 @@
             let html = `
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
                     <div class="mb-3 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                        <h2 class="text-lg font-bold text-slate-200">👥 成員清單</h2>
+                        <h2 class="text-lg font-bold text-slate-200">👥 總名單成員</h2>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">等級 ${getIcon('level')}</button>
                             <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">職業 ${getIcon('job')}</button>
@@ -641,8 +655,8 @@
                                 
                                 <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300">
                                 
-                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-22 rounded border border-amber-900 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300">
-                                    ${renderGroupSelectOptions(player.groupId)}
+                                <select onchange="updatePlayerField('${player.id}', 'groupId', this.value)" class="w-32 rounded border border-amber-900 bg-amber-950/40 px-1 py-0.5 text-xs text-amber-300">
+                                    ${renderGroupSelectOptions(player.groupId, player.id)}
                                 </select>
 
                                 <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
@@ -693,7 +707,6 @@
                     onEnd: function(evt) {
                         const itemId = evt.item?.dataset?.id;
                         const newIndex = evt.newDraggableIndex ?? evt.newIndex;
-                        
                         if (!itemId || evt.oldDraggableIndex === newIndex) return;
 
                         transactionUpdate(data => {
@@ -720,10 +733,12 @@
             document.getElementById("master-tab-badge").innerText = `${state.pool.length}人`;
             document.getElementById("master-view-container").innerHTML = renderPool();
 
-            initSortables();
+            setTimeout(initSortables, 50);
         }
 
-        initFirebaseListener();
+        window.addEventListener("DOMContentLoaded", () => {
+            initFirebaseListener();
+        });
     </script>
 </body>
 </html>
