@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artale 總名單</title>
+    <title>Artale 突襲報名</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 
     <style>
@@ -33,6 +34,125 @@
             transform: scale(1.02);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
         }
+        
+        .share-export-title {
+            font-size: 34px;
+            font-weight: 900;
+            text-align: center;
+            padding: 4px 20px 8px;
+            color: #f8fafc;
+            letter-spacing: 2px;
+        }
+
+        #share-card {
+            position: fixed;
+            left: -100000px;
+            top: 0;
+            width: max-content;
+            pointer-events: none;
+        }
+        .share-card-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 20px;
+            padding: 28px;
+            background: #111111;
+            color: #d1d5db;
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+        /* 匯出圖片的團隊欄位橫向排列；標題獨立放在最上方置中。 */
+        .share-export-columns {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .share-group-column {
+            width: 330px;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+            padding: 14px 16px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .share-group-header-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f3f4f6;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #3b82f6;
+            padding-bottom: 5px;
+        }
+        .share-team-wrapper {
+            display: flex;
+            flex-direction: column;
+        }
+        .share-team-title-text {
+            font-size: 17px;
+            font-weight: 700;
+            color: #93c5fd;
+            margin-top: 0px;
+            margin-bottom: 3px;
+            line-height: 21px;
+        }
+        .share-row-item {
+            display: flex;
+            align-items: center;
+            min-height: 28px;
+            height: 28px;
+            padding: 0;
+            line-height: 20px;
+            font-size: 15px;
+            color: #e5e7eb;
+            margin-bottom: 1px;
+            overflow: visible;
+        }
+        .share-divider-line {
+            height: 1px;
+            background-color: #3b82f6;
+            margin: 6px 0;
+            opacity: 0.8;
+        }
+        .share-col-level {
+            width: 48px;
+            text-align: right;
+            margin-right: 6px;
+            color: #93c5fd;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .share-col-job {
+            width: 72px;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+        .share-col-name {
+            width: 110px;
+            margin-right: 6px;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: nowrap;
+            line-height: 20px;
+            min-height: 20px;
+            flex-shrink: 0;
+        }
+        .share-col-part {
+            width: 60px;
+            color: #fde047;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        /* 總名單獨立版：保留原始隊伍程式與資料結構，但畫面只顯示總名單。 */
+        #btn-delete-week { display: none !important; }
+        body > div > div.grid.grid-cols-3 { display: none !important; }
+        #tab-content-master { display: block !important; }
+        #tab-content-teams, #tab-content-teams2 { display: none !important; }
     </style>
 </head>
 
@@ -40,11 +160,11 @@
     <div class="mx-auto max-w-7xl">
         <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
-            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 總名單</h1>
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 突襲報名</h1>
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
-        <!-- 週別切換區塊 (已刪除刪除此週按鈕) -->
+        <!-- 週別切換區塊 -->
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/90 p-4 shadow-md">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-bold text-slate-300">📅 切換週別：</span>
@@ -52,26 +172,123 @@
                 <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none"></select>
                 <button onclick="switchWeekRelative(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">下一週 ▶</button>
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
+                <button id="btn-delete-week" onclick="deleteCurrentWeek()" class="rounded-lg border border-rose-900 bg-rose-950/80 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900 transition">🗑️ 刪除此週</button>
             </div>
             <div class="text-xs text-slate-400">
-                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留。
+                💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間與隊伍分配</span>按週獨立。
             </div>
         </div>
 
-        <!-- 分頁切換區塊 (只留總名單) -->
-        <div class="mb-6 grid grid-cols-1 gap-2 rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-md">
-            <button id="tab-btn-master" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold bg-blue-600 text-white shadow-md transition-all duration-200">
+        <!-- 分頁切換區塊 -->
+        <div class="mb-6 grid grid-cols-3 gap-2 rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-md">
+            <button id="tab-btn-master" onclick="switchTab('master')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
                 <span>📋</span> 總名單 <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
+            </button>
+            <button id="tab-btn-teams" onclick="switchTab('teams')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
+                <span>⚔️</span> 6人隊伍分配 <span id="teams-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0/18</span>
+            </button>
+            <button id="tab-btn-teams2" onclick="switchTab('teams2')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
+                <span>⚔</span> 12人隊伍分配 <span id="teams2-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0/18</span>
             </button>
         </div>
 
         <!-- 主內容區 -->
         <main class="space-y-6">
             <!-- 總名單頁面 -->
-            <div id="tab-content-master" class="space-y-6">
+            <div id="tab-content-master" class="space-y-6 hidden">
                 <div id="master-view-container"></div>
             </div>
+
+            <!-- 隊伍分配頁面 1 (6人) -->
+            <div id="tab-content-teams" class="space-y-6 hidden">
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-base font-bold text-slate-200">遠征團管理 (6人)</h2>
+                    </div>
+                    <div id="group-tabs" class="mt-4 flex flex-wrap gap-3"></div>
+                </div>
+
+                <!-- 隊伍管理操作列 -->
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-sm">
+                    <div class="text-xs text-slate-400">
+                        📌 當前遠征團共有 <span id="current-teams-count" class="text-blue-400 font-bold">3</span> 支隊伍
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="addTeamToCurrentGroup(false)" class="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition">➕ 新增隊伍</button>
+                        <button onclick="removeTeamFromCurrentGroup(false)" class="rounded-lg border border-rose-900 bg-rose-950/60 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-900 transition">➖ 減少最後一隊</button>
+                    </div>
+                </div>
+
+                <div id="teams-cards-container" class="space-y-6"></div>
+                <div id="teams-pool-container"></div>
+
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <button onclick="openImageGenModal(false)" class="rounded-lg border border-blue-900 bg-blue-950/50 px-4 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-900/50">🖼️ 產生全部團隊圖片</button>
+                        <button onclick="clearCurrentGroup(false)" class="rounded-lg border border-slate-800 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-700">🧹 清空當前團隊伍</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 隊伍分配頁面 2 (12人，兩欄式緊湊版面) -->
+            <div id="tab-content-teams2" class="space-y-6 hidden">
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <h2 class="text-base font-bold text-slate-200">遠征團管理 (12人)</h2>
+                    </div>
+                    <div id="group-tabs-2" class="mt-4 flex flex-wrap gap-3"></div>
+                </div>
+
+                <!-- 隊伍管理操作列 -->
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-sm">
+                    <div class="text-xs text-slate-400">
+                        📌 當前遠征團共有 <span id="current-teams-count-2" class="text-blue-400 font-bold">3</span> 支隊伍
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="addTeamToCurrentGroup(true)" class="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition">➕ 新增隊伍</button>
+                        <button onclick="removeTeamFromCurrentGroup(true)" class="rounded-lg border border-rose-900 bg-rose-950/60 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-900 transition">➖ 減少最後一隊</button>
+                    </div>
+                </div>
+
+                <div id="teams-cards-container-2" class="space-y-6"></div>
+                <div id="teams-pool-container-2"></div>
+
+                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <button onclick="openImageGenModal(true)" class="rounded-lg border border-blue-900 bg-blue-950/50 px-4 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-900/50">🖼️ 產生全部團隊圖片</button>
+                        <button onclick="clearCurrentGroup(true)" class="rounded-lg border border-slate-800 bg-slate-800 px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-700">🧹 清空當前團隊伍</button>
+                    </div>
+                </div>
+            </div>
         </main>
+    </div>
+
+    <!-- 圖片匯出暫存容器 -->
+    <div id="share-card"></div>
+
+    <!-- 圖片預覽 Modal -->
+    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 id="modal-title" class="text-lg font-bold text-slate-100">團隊圖片預覽</h3>
+                <button onclick="closeModal()" class="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
+            </div>
+            <div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                <span class="text-xs font-bold text-slate-300 mr-1">圖片標籤</span>
+                <div id="image-export-title" class="flex flex-wrap gap-2"></div>
+                <span class="text-xs text-slate-500">點一下立即更新圖片，標題會置中顯示在圖片最上方</span>
+            </div>
+            <div class="relative flex flex-1 items-center justify-center overflow-auto rounded-lg bg-slate-950 p-2">
+                <img id="modal-img" class="max-h-[65vh] rounded object-contain shadow-lg" src="" alt="團隊圖片預覽">
+            </div>
+            <div class="mt-4 border-t border-slate-800 pt-4">
+                <div id="image-day-buttons" class="flex flex-wrap gap-2"></div>
+            </div>
+            <div class="mt-4 flex items-center justify-end gap-2 border-t border-slate-800 pt-4">
+                <button id="btn-copy-img" onclick="copyModalImage()" class="rounded-lg border border-blue-600 bg-blue-600/20 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-600/40 transition-colors">📋 複製圖片</button>
+                <button onclick="downloadModalImage()" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500">💾 下載圖片</button>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -80,7 +297,8 @@
 
     <script>
         // ==========================================
-        // 1. 常數與設定值 (Constants & Config)
+        // 1. 常數與設定值
+        // 這裡集中放 Firebase、週別、職業等固定設定。
         // ==========================================
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCbD0DlTCKkDzjkyADmovtjSe6j6blClZI",
@@ -94,7 +312,10 @@
 
         const FIREBASE_PATH = "artale_party_state_v3";
         const STORAGE_KEY = "artale_party_local_v3";
+        const MAX_GROUPS = 7;
+        const GROUP_NAMES = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
+        const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
         
         const JOB_LIST = ["黑騎士", "英雄", "聖騎士", "火毒", "冰雷", "主教", "箭神", "神射手", "夜使者", "暗影神偷", "槍神", "拳霸"];
 
@@ -116,18 +337,43 @@
         const DEFAULT_JOB_CLASS = "bg-slate-900 border-slate-800 text-slate-400";
         const DEFAULT_JOB_STYLE = "background-color: #0f172a; color: #94a3b8;";
 
+        // ========================================== 
+        // 共用標籤設定
+        // 之後新增標籤，只要在這裡增加一筆即可。
+        // key：玩家資料使用的欄位
+        // filterLabel：總名單／成員名單的篩選文字
+        // imageLabel：圖片標題按鈕文字
+        // activeClass：標籤被選取時的顏色
+        // ========================================== 
+        const SHARED_TAGS = [
+            { key: "treeKing", filterLabel: "樹王", imageLabel: "克雷塞爾『樹王』", activeClass: "bg-emerald-600 border-emerald-500 text-white", playerClass: "bg-emerald-950 border-emerald-600 text-emerald-300" },
+            { key: "dragonKing", filterLabel: "龍王", imageLabel: "闇黑龍王『龍王』", activeClass: "bg-amber-600 border-amber-500 text-white", playerClass: "bg-amber-950 border-amber-500 text-amber-300" },
+            { key: "hardLotus", filterLabel: "困拉", imageLabel: "『困難拉圖斯』", activeClass: "bg-pink-600 border-pink-500 text-white", playerClass: "bg-violet-950 border-violet-600 text-violet-300" },
+            { key: "poisonButterfly", filterLabel: "毒蝴蝶", imageLabel: "艾畢奈亞『毒蝴蝶』", activeClass: "bg-violet-600 border-violet-500 text-white", playerClass: "bg-pink-950 border-pink-600 text-pink-300" },
+            { key: "iceButterfly", filterLabel: "冰蝴蝶", imageLabel: "艾畢奈亞『冰蝴蝶』", activeClass: "bg-cyan-600 border-cyan-500 text-white", playerClass: "bg-cyan-950 border-cyan-600 text-cyan-300" }
+        ];
+
         // ==========================================
         // 2. 全域狀態變數 (Global State)
         // ==========================================
         let database = null;
         let firebaseEnabled = false;
         let sortableInstances = [];
+        let currentTab = "master";
+        let previewImages = [];
+        let currentImageIndex = 0;
         let poolSortState = { field: null, direction: 'desc' };
         let poolJobFilters = [];
         let poolTagFilter = "all";
+        // 6人／12人隊伍頁面的成員名單日期篩選：-1=全部，0~6=週二~週一
+        let poolDayFilter = -1;
+        let pendingImageGenIsTeams2 = false;
 
         let state = {
             activeWeek: formatDateKey(getTuesdayOfWeek()),
+            activeGroup: 0,
+            activeGroup2: 0,
+            filterAvailableOnly: true,
             pool: [],
             weeksData: {}
         };
@@ -202,6 +448,13 @@
             return rangeStr;
         }
 
+        function getWeekday(date) {
+            const parts = String(date).split("/");
+            if (parts.length < 2) return "";
+            const d = new Date(new Date().getFullYear(), Number(parts[0]) - 1, Number(parts[1]));
+            return isNaN(d) ? "" : WEEKDAY_NAMES[d.getDay()];
+        }
+
         function setSyncStatus(text, className = "text-[11px] text-slate-500") {
             const el = document.getElementById("sync-status");
             if (el) { 
@@ -213,17 +466,38 @@
         // ==========================================
         // 4. 預設資料結構產生器 (Default Generators)
         // ==========================================
+        function createDefaultTeams(isTeams2 = false) {
+            // 6人隊伍預設「連14場」；12人隊伍預設「連7場」。
+            const defaultCon = !isTeams2;
+            return [
+                { name: "第1隊", emoji: "⚔️", time: "20:00", con: defaultCon, members: [] },
+                { name: "第2隊", emoji: "⚔️", time: "20:00", con: defaultCon, members: [] },
+                { name: "第3隊", emoji: "⚔️", time: "20:00", con: defaultCon, members: [] }
+            ];
+        }
+
+        function createDefaultWeekGroups(weekKey, isTeams2 = false) {
+            const [y, m, d] = (weekKey || formatDateKey(getTuesdayOfWeek())).split('-').map(Number);
+            const startDate = y ? new Date(y, m - 1, d) : getTuesdayOfWeek();
+            return Array.from({ length: MAX_GROUPS }, (_, i) => {
+                const targetDate = new Date(startDate);
+                targetDate.setDate(startDate.getDate() + i);
+                return { teams: createDefaultTeams(isTeams2), date: `${targetDate.getMonth() + 1}/${targetDate.getDate()}` };
+            });
+        }
+
         function createEmptyFirebaseData() {
             const defaultWeekKey = formatDateKey(getTuesdayOfWeek());
             return { 
                 activeWeek: defaultWeekKey, 
                 pool: [], 
-                weeksData: { [defaultWeekKey]: {} } 
+                weeksData: { [defaultWeekKey]: { groups: createDefaultWeekGroups(defaultWeekKey, false), groups2: createDefaultWeekGroups(defaultWeekKey, true) } } 
             };
         }
 
         // ==========================================
-        // 5. 資料規格化邏輯 (Normalization)
+        // 5. 資料規格化邏輯
+        // Firebase / 舊資料載入時，統一整理成目前程式使用的格式。
         // ==========================================
         function normalizeAvailabilityArray(arr) {
             const def = ["", "", "", "", "", "", ""];
@@ -260,8 +534,37 @@
                 part: String(player.part || ""),
                 treeKing: Boolean(player.treeKing), 
                 dragonKing: Boolean(player.dragonKing), 
+                ...Object.fromEntries(SHARED_TAGS.map(tag => [tag.key, Boolean(player[tag.key])])),
                 availability: normalizePlayerAvailability(player.availability, wk),
                 note: String(player.note || player["備註"] || "").trim()
+            };
+        }
+
+        function normalizeGroupsData(rawGroups, wk, isTeams2 = false) {
+            let groups = Array.isArray(rawGroups) ? rawGroups.slice(0, MAX_GROUPS) : [];
+            const defGroups = createDefaultWeekGroups(wk, isTeams2);
+            
+            while (groups.length < MAX_GROUPS) {
+                groups.push(defGroups[groups.length]);
+            }
+
+            return groups.map((g, idx) => {
+                const teams = Array.isArray(g?.teams) ? g.teams.map((t, tIdx) => ({
+                    name: t.name || `第${tIdx + 1}隊`,
+                    emoji: t.emoji || "⚔️",
+                    time: t.time || "20:00",
+                    con: Boolean(t.con),
+                    members: Array.isArray(t.members) ? t.members.map(p => normalizePlayer(p, wk)).filter(Boolean) : []
+                })) : createDefaultTeams(isTeams2);
+                
+                return { teams, date: typeof g?.date === "string" && g.date ? g.date : defGroups[idx].date };
+            });
+        }
+
+        function normalizeWeekGroupData(weekData, wk) {
+            return {
+                groups: normalizeGroupsData(weekData?.groups, wk, false),
+                groups2: normalizeGroupsData(weekData?.groups2 || weekData?.groups, wk, true)
             };
         }
 
@@ -274,11 +577,11 @@
             
             if (data.weeksData && typeof data.weeksData === "object") {
                 for (const wk in data.weeksData) {
-                    weeksData[wk] = data.weeksData[wk] || {};
+                    weeksData[wk] = normalizeWeekGroupData(data.weeksData[wk], wk);
                 }
             }
             if (!weeksData[activeWeek]) {
-                weeksData[activeWeek] = {};
+                weeksData[activeWeek] = { groups: createDefaultWeekGroups(activeWeek, false), groups2: createDefaultWeekGroups(activeWeek, true) };
             }
             
             const pool = Array.isArray(data.pool) ? data.pool.map(p => normalizePlayer(p, activeWeek)).filter(Boolean) : [];
@@ -289,13 +592,26 @@
             const norm = normalizeFirebaseData(data);
             state = {
                 activeWeek: norm.activeWeek,
+                activeGroup: Math.min(Math.max(state.activeGroup || 0, 0), MAX_GROUPS - 1),
+                activeGroup2: Math.min(Math.max(state.activeGroup2 || 0, 0), MAX_GROUPS - 1),
+                filterAvailableOnly: typeof state.filterAvailableOnly === "boolean" ? state.filterAvailableOnly : true,
                 pool: norm.pool,
                 weeksData: norm.weeksData
             };
         }
 
+        function currentWeekData() { 
+            return state.weeksData[state.activeWeek] || { groups: createDefaultWeekGroups(state.activeWeek, false), groups2: createDefaultWeekGroups(state.activeWeek, true) }; 
+        }
+        
+        function currentGroup(isTeams2 = false) { 
+            const w = currentWeekData();
+            return (isTeams2 ? w.groups2 : w.groups)[isTeams2 ? state.activeGroup2 : state.activeGroup] || { teams: createDefaultTeams(), date: "" }; 
+        }
+
         // ==========================================
-        // 6. 資料庫與狀態同步 (Database Sync)
+        // 6. 資料庫與狀態同步
+        // Firebase 開啟時同步雲端；失敗時退回 localStorage。
         // ==========================================
         function saveLocalState() {
             try { 
@@ -368,8 +684,53 @@
         }
 
         // ==========================================
-        // 7. 商業邏輯運算 (Business Logic)
+        // 7. 商業邏輯運算
+        // 隊伍限制、玩家是否已安排等「規則」集中在這裡。
         // ==========================================
+        function getPlayerWeeklyTeamCount(playerId, weekData) {
+            if (!weekData) return 0;
+            let count = 0;
+            const checkGroups = (gs) => {
+                if (!gs) return;
+                gs.forEach(group => {
+                    (group.teams || []).forEach(team => {
+                        if (team && team.members && team.members.some(p => String(p.id) === String(playerId))) {
+                            count += team.con ? 2 : 1;
+                        }
+                    });
+                });
+            };
+            checkGroups(weekData.groups);
+            checkGroups(weekData.groups2);
+            return count;
+        }
+
+        // ----------------------------------------------------------
+        // 取得玩家在「12人隊伍」中的排隊狀態
+        // 規則：只要玩家已經被排進本週任何一個 12 人隊伍，
+        // 就不再顯示於 12 人頁面的「待排名單」。
+        // 移出 12 人隊伍後，玩家會自動重新出現在名單。
+        // ----------------------------------------------------------
+        function isPlayerAssignedTo12Team(playerId, weekData) {
+            if (!weekData?.groups2) return false;
+
+            return weekData.groups2.some(group =>
+                (group.teams || []).some(team =>
+                    (team.members || []).some(member =>
+                        String(member.id) === String(playerId)
+                    )
+                )
+            );
+        }
+
+        function hasReachedWeeklyLimit(player, weekData) {
+            const rounds = String(player.rounds || "7");
+            const assignedCount = getPlayerWeeklyTeamCount(player.id, weekData);
+            if (rounds === "14" && assignedCount >= 2) return true;
+            if (rounds === "7" && assignedCount >= 1) return true;
+            return false;
+        }
+
         function sortPoolBy(field) {
             if (poolSortState.field === field) {
                 poolSortState.direction = poolSortState.direction === 'asc' ? 'desc' : 'asc';
@@ -420,7 +781,8 @@
         }
 
         // ==========================================
-        // 8. 介面事件處理與動作 (UI Event Handlers)
+        // 8. 介面事件處理與動作
+        // 按鈕、拖曳、玩家資料修改等操作都在這裡。
         // ==========================================
         function toggleJobFilter(job) {
             const idx = poolJobFilters.indexOf(job);
@@ -442,6 +804,79 @@
             render();
         }
 
+        function setPoolDayFilter(dayIdx) {
+            poolDayFilter = Number(dayIdx);
+            render();
+        }
+
+        function moveEntireTeamToTargetGroup(sTeamIdx, targetGroupIdx, isTeams2 = false) {
+            if (targetGroupIdx === "" || isNaN(targetGroupIdx)) return;
+            const targetGIdx = parseInt(targetGroupIdx, 10);
+            const activeG = isTeams2 ? state.activeGroup2 : state.activeGroup;
+            if (targetGIdx === activeG) {
+                alert("該隊伍已經在當前星期！");
+                return;
+            }
+
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const srcGroup = groupsArr[activeG];
+                const targetGroup = groupsArr[targetGIdx];
+
+                if (!srcGroup || !srcGroup.teams[sTeamIdx]) return false;
+
+                const movingTeam = srcGroup.teams[sTeamIdx];
+                if (!targetGroup.teams) targetGroup.teams = [];
+
+                const emptyTeamIdx = targetGroup.teams.findIndex(t => !t.members || t.members.length === 0);
+
+                if (emptyTeamIdx !== -1) {
+                    targetGroup.teams[emptyTeamIdx].members = JSON.parse(JSON.stringify(movingTeam.members || []));
+                    targetGroup.teams[emptyTeamIdx].con = Boolean(movingTeam.con);
+                } else {
+                    const newTeam = JSON.parse(JSON.stringify(movingTeam));
+                    newTeam.name = `第${targetGroup.teams.length + 1}隊`;
+                    targetGroup.teams.push(newTeam);
+                }
+
+                srcGroup.teams[sTeamIdx].members = [];
+                srcGroup.teams[sTeamIdx].con = false;
+
+                alert(`成功將【${movingTeam.name}】成員搬移至 ${GROUP_NAMES[targetGIdx]}！`);
+                return true;
+            });
+        }
+
+        function moveTeamToTeam(sTeamIdx, targetTeamIdxStr, isTeams2 = false) {
+            if (targetTeamIdxStr === "") return;
+            const targetTeamIdx = parseInt(targetTeamIdxStr, 10);
+            if (sTeamIdx === targetTeamIdx) {
+                alert("無法移動至同一隊！");
+                return;
+            }
+
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const teams = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams;
+                if (!teams[sTeamIdx] || !teams[targetTeamIdx]) return false;
+
+                const sourceTeam = teams[sTeamIdx];
+                const targetTeam = teams[targetTeamIdx];
+
+                sourceTeam.members.forEach(member => {
+                    if (!targetTeam.members.some(m => String(m.id) === String(member.id))) {
+                        targetTeam.members.push(member);
+                    }
+                });
+
+                sourceTeam.members = [];
+                sourceTeam.con = false;
+                return true;
+            });
+        }
+
         function getAvailableWeekKeys() {
             const set = new Set(Object.keys(state.weeksData || {}));
             const base = getTuesdayOfWeek();
@@ -457,7 +892,7 @@
             if (!wk) return;
             transactionUpdate(data => {
                 data.activeWeek = wk;
-                if (!data.weeksData[wk]) data.weeksData[wk] = {};
+                if (!data.weeksData[wk]) data.weeksData[wk] = { groups: createDefaultWeekGroups(wk, false), groups2: createDefaultWeekGroups(wk, true) };
                 return true;
             });
         }
@@ -473,11 +908,139 @@
             selectWeek(formatDateKey(getTuesdayOfWeek())); 
         }
 
+        function deleteCurrentWeek() {
+            const wk = state.activeWeek;
+            if (!confirm(`確定要刪除「${getWeekDisplayTitle(wk)}」的週別資料嗎？`)) return;
+            transactionUpdate(data => {
+                delete data.weeksData[wk];
+                data.activeWeek = formatDateKey(getTuesdayOfWeek());
+                if (!data.weeksData[data.activeWeek]) data.weeksData[data.activeWeek] = { groups: createDefaultWeekGroups(data.activeWeek, false), groups2: createDefaultWeekGroups(data.activeWeek, true) };
+                return true;
+            });
+        }
+
+        function switchTab(tab) { currentTab = tab; render(); }
+        function selectGroup(idx, isTeams2 = false) { 
+            if (isTeams2) state.activeGroup2 = idx;
+            else state.activeGroup = idx;
+            render(); 
+        }
+
+        function addTeamToCurrentGroup(isTeams2 = false) {
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const g = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup];
+                g.teams.push({ name: `第${g.teams.length + 1}隊`, emoji: "⚔️", time: "20:00", con: !isTeams2, members: [] });
+                return true;
+            });
+        }
+
+        function removeTeamFromCurrentGroup(isTeams2 = false) {
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const g = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup];
+                if (g.teams.length === 0) {
+                    alert("目前已經沒有隊伍！");
+                    return false;
+                }
+                const lastTeam = g.teams[g.teams.length - 1];
+                const hasMembers = lastTeam.members && lastTeam.members.length > 0;
+                
+                const msg = hasMembers 
+                    ? `確定要移除【${lastTeam.name}】嗎？該隊伍內有 ${lastTeam.members.length} 名成員，移除後成員將回歸總名單。`
+                    : `確定要移除【${lastTeam.name}】嗎？`;
+
+                if (confirm(msg)) {
+                    g.teams.pop();
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        function updateTeamName(tIdx, name, isTeams2 = false) {
+            transactionUpdate(data => { 
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].name = String(name || `第${tIdx + 1}隊`); 
+                return true; 
+            });
+        }
+
+        function updateTeamTime(tIdx, time, isTeams2 = false) {
+            transactionUpdate(data => { 
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].time = String(time || "20:00"); 
+                return true; 
+            });
+        }
+
+        function updateTeamCon(tIdx, con, isTeams2 = false) {
+            transactionUpdate(data => { 
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].con = Boolean(con); 
+                return true; 
+            });
+        }
+
+        function updateGroupDate(idx, date, isTeams2 = false) {
+            transactionUpdate(data => { 
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                groupsArr[idx].date = String(date); 
+                return true; 
+            });
+        }
+
         function updatePlayerField(id, field, val) {
             const norm = field === "level" ? normalizeLevel(val) : String(val);
             transactionUpdate(data => {
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) p[field] = norm;
+                
+                for (const wk in data.weeksData) {
+                    const checkGs = (gs) => {
+                        if (!gs) return;
+                        gs.forEach(g => {
+                            (g.teams || []).forEach(t => {
+                                (t.members || []).forEach(m => { 
+                                    if (String(m.id) === String(id)) m[field] = norm; 
+                                });
+                            });
+                        });
+                    };
+                    checkGs(data.weeksData[wk].groups);
+                    checkGs(data.weeksData[wk].groups2);
+                }
+                return true;
+            });
+        }
+
+        // 新增：處理 6 人隊伍成員的前7 / 後7 場次勾選
+        function updateTeamMemberPart(tIdx, mIdx, partVal, isTeams2 = false) {
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const targetMember = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].members[mIdx];
+                if (targetMember) {
+                    targetMember.part = targetMember.part === partVal ? "" : partVal;
+                }
+                return true;
+            });
+        }
+
+        function updateTeamMemberNote(tIdx, mIdx, val, isTeams2 = false) {
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const targetMember = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].members[mIdx];
+                if (targetMember) {
+                    targetMember.note = String(val || "");
+                }
                 return true;
             });
         }
@@ -486,6 +1049,21 @@
             transactionUpdate(data => {
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) p[tagField] = Boolean(checked);
+                
+                for (const wk in data.weeksData) {
+                    const checkGs = (gs) => {
+                        if (!gs) return;
+                        gs.forEach(g => {
+                            (g.teams || []).forEach(t => {
+                                (t.members || []).forEach(m => { 
+                                    if (String(m.id) === String(id)) m[tagField] = Boolean(checked); 
+                                });
+                            });
+                        });
+                    };
+                    checkGs(data.weeksData[wk].groups);
+                    checkGs(data.weeksData[wk].groups2);
+                }
                 return true;
             });
         }
@@ -501,6 +1079,21 @@
                 
                 const p = data.pool.find(item => String(item.id) === String(id));
                 if (p) update(p);
+                
+                for (const w in data.weeksData) {
+                    const checkGs = (gs) => {
+                        if (!gs) return;
+                        gs.forEach(g => {
+                            (g.teams || []).forEach(t => {
+                                (t.members || []).forEach(m => { 
+                                    if (String(m.id) === String(id)) update(m); 
+                                });
+                            });
+                        });
+                    };
+                    checkGs(data.weeksData[w].groups);
+                    checkGs(data.weeksData[w].groups2);
+                }
                 return true;
             });
         }
@@ -520,12 +1113,78 @@
             if (!confirm("確定要刪除此成員嗎？")) return;
             transactionUpdate(data => {
                 data.pool = data.pool.filter(p => String(p.id) !== String(id));
+                for (const wk in data.weeksData) {
+                    const cleanGs = (gs) => {
+                        if (!gs) return;
+                        gs.forEach(g => {
+                            (g.teams || []).forEach(t => { 
+                                t.members = (t.members || []).filter(m => String(m.id) !== String(id)); 
+                            });
+                        });
+                    };
+                    cleanGs(data.weeksData[wk].groups);
+                    cleanGs(data.weeksData[wk].groups2);
+                }
                 return true;
             });
         }
 
+        function sendToTeam(id, tIdx, isTeams2 = false) {
+            transactionUpdate(data => {
+                const p = data.pool.find(item => String(item.id) === String(id));
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                const targetTeam = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx];
+                
+                // 12 人隊伍：同一玩家本週只能存在於 12 人隊伍中的一個安排。
+                if (isTeams2 && isPlayerAssignedTo12Team(id, wData)) {
+                    alert("此玩家已排入本週 12 人隊伍，請先從原隊伍移除後再重新安排！");
+                    return false;
+                }
+
+                if (hasReachedWeeklyLimit(p, wData)) {
+                    alert("此玩家本週已達出賽上限！");
+                    return false;
+                }
+                if (targetTeam.members.some(m => String(m.id) === String(id))) return false;
+                
+                const newMember = { ...p };
+                if (isTeams2) {
+                    newMember.note = "";
+                }
+
+                targetTeam.members.push(newMember);
+                return true; 
+            });
+        }
+
+        function removeFromTeam(tIdx, mIdx, isTeams2 = false) {
+            transactionUpdate(data => { 
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx].members.splice(mIdx, 1); 
+                return true; 
+            });
+        }
+
+        function clearCurrentGroup(isTeams2 = false) {
+            const teamTypeText = isTeams2 ? "12人團隊" : "6人團隊";
+            if (!confirm(`確定要清空當前${teamTypeText}的所有隊伍成員嗎？`)) return;
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+                (groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams || []).forEach(t => { 
+                    t.members = []; 
+                    t.time = "20:00"; 
+                    t.con = false; 
+                });
+                return true; 
+            });
+        }
+
         // ==========================================
-        // 9. 視圖渲染與 HTML 生成 (DOM Rendering)
+        // 9. 視圖渲染與 HTML 生成
+        // 所有畫面上的 HTML 都由這一區依目前狀態重新產生。
         // ==========================================
         function getJobColorClass(job) {
             return JOB_STYLE_MAP[job]?.class || DEFAULT_JOB_CLASS;
@@ -558,6 +1217,7 @@
                 const gKey = `g${i}`;
                 const isUsed = usedGroupMap.has(gKey);
                 const usedByName = isUsed ? usedGroupMap.get(gKey) : '';
+                
                 const label = isUsed ? `大小號 ${i} (已使用${usedByName ? ': ' + usedByName : ''})` : `大小號 ${i}`;
                 const optionClass = isUsed ? "bg-slate-900 text-slate-500 italic" : "bg-slate-900 text-amber-400 font-bold";
                 
@@ -581,31 +1241,208 @@
             `).join("");
         }
 
-        function renderPool() {
-            let displayPool = state.pool;
+        function memberCard(player, idx, tIdx, isTeams2 = false) {
+            return `
+                <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 transition">
+                    <div class="min-w-0 pr-1 flex-1 flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs text-slate-500">#${idx + 1}</span>
+                        
+                        <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400">
+                        
+                        <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-20 rounded border px-1 py-0.5 text-xs ${getJobColorClass(player.job)}">
+                            ${renderJobSelectOptions(player.job)}
+                        </select>
+                        
+                        <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-20 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200 font-bold">
+                        
+                        <input type="text" value="${escapeHtml(player.position)}" placeholder="AD/AP" onchange="updatePlayerField('${player.id}', 'position', this.value)" class="w-14 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-300">
+                        
+                        <div class="flex items-center gap-1 bg-purple-950/40 px-2 py-0.5 rounded border border-purple-900/60">
+                            <label class="flex items-center gap-1 text-[11px] text-purple-300 cursor-pointer">
+                                <input type="checkbox" ${player.part === "first" ? "checked" : ""} onchange="updateTeamMemberPart(${tIdx}, ${idx}, 'first', ${isTeams2})"> 前7
+                            </label>
+                            <label class="flex items-center gap-1 text-[11px] text-purple-300 cursor-pointer ml-1">
+                                <input type="checkbox" ${player.part === "second" ? "checked" : ""} onchange="updateTeamMemberPart(${tIdx}, ${idx}, 'second', ${isTeams2})"> 後7
+                            </label>
+                        </div>
+
+                        <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
+
+                        <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200">
+                            <option value="7" ${player.rounds === "7" ? "selected" : ""}>7場</option>
+                            <option value="14" ${player.rounds === "14" ? "selected" : ""}>14場</option>
+                        </select>
+
+                        <div class="flex items-center gap-1.5">
+                            ${SHARED_TAGS.map(tag => `
+                                <label class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border cursor-pointer ${player[tag.key] ? tag.playerClass + ' font-bold' : 'bg-slate-900 border-slate-800 text-slate-500'}">
+                                    <input type="checkbox" ${player[tag.key] ? "checked" : ""} onchange="updatePlayerTag('${player.id}', '${tag.key}', this.checked)"> ${escapeHtml(tag.filterLabel)}
+                                </label>
+                            `).join('')}
+                        </div>
+
+                        <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-35 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
+                    </div>
+                    <button onclick="removeFromTeam(${tIdx}, ${idx}, ${isTeams2})" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
+                </div>
+            `;
+        }
+
+        function memberCardTeams2(player, idx, tIdx) {
+            return `
+                <div data-id="${escapeHtml(player.id)}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 transition shadow-sm">
+                    <div class="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                        <span class="text-xs font-semibold text-slate-400 w-6">#${idx + 1}</span>
+                        
+                        <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded px-1.5 py-1">
+                            <span class="text-[11px] text-blue-400 font-semibold">Lv.</span>
+                            <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-9 bg-transparent text-center text-xs text-blue-300 font-bold focus:outline-none" placeholder="000">
+                        </div>
+                        
+                        <select onchange="updatePlayerField('${player.id}', 'job', this.value)" class="w-24 rounded border px-2 py-1 text-xs ${getJobColorClass(player.job)}">
+                            ${renderJobSelectOptions(player.job)}
+                        </select>
+                        
+                        <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200 font-bold" placeholder="名字">
+                        
+                        <input type="text" value="${escapeHtml(player.note || '')}" placeholder="位置" onchange="updateTeamMemberNote(${tIdx}, ${idx}, this.value, true)" class="w-40 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-yellow-300 placeholder-slate-600 font-medium">
+                    </div>
+                    <button onclick="removeFromTeam(${tIdx}, ${idx}, true)" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950 transition ml-2">✕</button>
+                </div>
+            `;
+        }
+
+        function renderTeamsContainer(isTeams2 = false) {
+            let html = "";
+            const currentTeams = currentGroup(isTeams2).teams || [];
+            const activeGroupIdx = isTeams2 ? state.activeGroup2 : state.activeGroup;
+            const listTypePrefix = isTeams2 ? "team2_" : "team_";
+
+            const otherDayOptions = GROUP_NAMES.map((name, gIdx) => {
+                if (gIdx === activeGroupIdx) return '';
+                return `<option value="${gIdx}">移至 ${name}</option>`;
+            }).join("");
+
+            if (currentTeams.length === 0) {
+                return `<div class="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-500">當前遠征團暫無任何隊伍，請點擊上方「➕ 新增隊伍」按鈕新增。</div>`;
+            }
+
+            currentTeams.forEach((team, tIdx) => {
+                const members = team.members || [];
+                
+                let otherTeamsOptions = `<option value="">移至同日隊</option>`;
+                currentTeams.forEach((ot, otIdx) => {
+                    if (otIdx !== tIdx) {
+                        otherTeamsOptions += `<option value="${otIdx}">移至 ${escapeHtml(ot.name)}</option>`;
+                    }
+                });
+
+                const gridClass = isTeams2 ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "flex flex-col gap-3";
+
+                html += `
+                    <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
+                        <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <span class="text-lg">⚔️</span>
+                                <input type="text" value="${escapeHtml(team.name)}" onchange="updateTeamName(${tIdx}, this.value, ${isTeams2})" class="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-base font-bold text-blue-300">
+                                <input type="text" value="${escapeHtml(team.time || "20:00")}" maxlength="5" onchange="updateTeamTime(${tIdx}, this.value, ${isTeams2})" class="w-16 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400 font-bold">
+                                <div class="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950/70 p-1">
+                                    <label class="flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer text-xs ${!team.con ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-800'}">
+                                        <input type="radio" name="team-rounds-${isTeams2 ? '2_' : ''}${tIdx}" ${!team.con ? "checked" : ""} onchange="updateTeamCon(${tIdx}, false, ${isTeams2})"> 連7場
+                                    </label>
+                                    <label class="flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer text-xs ${team.con ? 'bg-amber-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-800'}">
+                                        <input type="radio" name="team-rounds-${isTeams2 ? '2_' : ''}${tIdx}" ${team.con ? "checked" : ""} onchange="updateTeamCon(${tIdx}, true, ${isTeams2})"> 連14場
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <div class="flex items-center gap-1 bg-slate-800/60 p-1 rounded-lg border border-slate-700">
+                                    <select id="move-to-team-${isTeams2 ? '2_' : ''}${tIdx}" class="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200">
+                                        ${otherTeamsOptions}
+                                    </select>
+                                    <button onclick="moveTeamToTeam(${tIdx}, document.getElementById('move-to-team-${isTeams2 ? '2_' : ''}${tIdx}').value, ${isTeams2})" class="rounded bg-slate-700 hover:bg-slate-600 px-2.5 py-1 text-xs font-bold text-slate-200 transition">確認轉移</button>
+                                </div>
+
+                                <div class="flex items-center gap-1 bg-blue-950/60 p-1 rounded-lg border border-blue-800/80">
+                                    <select id="move-team-select-${isTeams2 ? '2_' : ''}${tIdx}" class="rounded border border-blue-700 bg-slate-900 px-2 py-1 text-xs text-blue-300 font-bold">
+                                        <option value="">移至其他週</option>
+                                        ${otherDayOptions}
+                                    </select>
+                                    <button onclick="moveEntireTeamToTargetGroup(${tIdx}, document.getElementById('move-team-select-${isTeams2 ? '2_' : ''}${tIdx}').value, ${isTeams2})" class="rounded bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-xs font-bold text-white transition">確認轉移</button>
+                                </div>
+                                <span class="rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-300">${members.length} 人</span>
+                            </div>
+                        </div>
+                        <div id="${listTypePrefix}${tIdx}-list" data-list-type="${listTypePrefix}${tIdx}" class="sortable-list ${gridClass} min-h-[80px]">
+                            ${members.length === 0 ? `<p class="col-span-full text-center text-xs text-slate-500 py-4">此隊伍目前暫無成員</p>` : members.map((m, mIdx) => isTeams2 ? memberCardTeams2(m, mIdx, tIdx) : memberCard(m, mIdx, tIdx, false)).join("")}
+                        </div>
+                    </div>
+                `;
+            });
+            return html;
+        }
+
+        function renderPool(isMasterView, isTeams2 = false) {
+            const idSuffix = isMasterView ? "master" : (isTeams2 ? "teams2" : "teams");
+            const wData = currentWeekData();
+            
+            // ------------------------------------------------------
+            // 待排名單顯示規則
+            // 6人頁：依原本的「本週出賽上限」過濾。
+            // 12人頁：除了原本的上限外，只要已排進 12 人隊伍，
+            // 就直接從待排名單隱藏，避免同一玩家重複安排。
+            // 總名單頁：維持顯示全部玩家。
+            // ------------------------------------------------------
+            let displayPool = isMasterView
+                ? state.pool
+                : state.pool.filter(p => !hasReachedWeeklyLimit(p, wData));
+
+            if (isTeams2 && !isMasterView) {
+                displayPool = displayPool.filter(p => !isPlayerAssignedTo12Team(p.id, wData));
+            }
 
             if (poolJobFilters.length > 0) {
                 displayPool = displayPool.filter(p => poolJobFilters.includes(String(p.job || "").trim()));
             }
 
-            if (poolTagFilter === "treeKing") {
-                displayPool = displayPool.filter(p => p.treeKing);
-            } else if (poolTagFilter === "dragonKing") {
-                displayPool = displayPool.filter(p => p.dragonKing);
-            } else if (poolTagFilter === "both") {
-                displayPool = displayPool.filter(p => p.treeKing || p.dragonKing);
+            if (poolTagFilter !== "all") {
+                const selectedTag = SHARED_TAGS.find(tag => tag.key === poolTagFilter);
+                if (selectedTag) {
+                    displayPool = displayPool.filter(p => Boolean(p[selectedTag.key]));
+                }
+            }
+
+            // 只有 6人／12人隊伍頁面的成員名單套用日期篩選；總名單維持原本顯示方式。
+            if (!isMasterView && poolDayFilter >= 0 && poolDayFilter <= 6) {
+                displayPool = displayPool.filter(p => {
+                    const availability = getPlayerWeekAvailability(p, state.activeWeek);
+                    return String(availability[poolDayFilter] || "").trim() !== "";
+                });
             }
 
             const getIcon = f => poolSortState.field !== f ? '↕️' : (poolSortState.direction === 'asc' ? '▲' : '▼');
+            const teams = currentGroup(isTeams2).teams || [];
 
             let filterBarHtml = `
                 <div class="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 mb-3">
                     <div class="flex flex-wrap items-center gap-1.5">
                         <span class="text-xs text-slate-400 mr-1 font-semibold">標籤篩選：</span>
                         <button onclick="setPoolTagFilter('all')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'all' ? 'bg-blue-600 border-blue-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">全部</button>
-                        <button onclick="setPoolTagFilter('treeKing')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'treeKing' ? 'bg-emerald-600 border-emerald-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-emerald-400 hover:border-slate-700'}">樹王</button>
-                        <button onclick="setPoolTagFilter('dragonKing')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'dragonKing' ? 'bg-amber-600 border-amber-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-amber-400 hover:border-slate-700'}">龍王</button>
+                        ${SHARED_TAGS.map(tag => `
+                            <button onclick="setPoolTagFilter('${tag.key}')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === tag.key ? tag.activeClass : `bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700`}">${escapeHtml(tag.filterLabel)}</button>
+                        `).join('')}
                     </div>
+
+                    ${!isMasterView ? `
+                    <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-900 pt-2">
+                        <span class="text-xs text-slate-400 mr-1 font-semibold">出席時間：</span>
+                        <button onclick="setPoolDayFilter(-1)" class="text-[11px] px-2.5 py-1 rounded transition border ${poolDayFilter === -1 ? 'bg-blue-600 border-blue-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">全部</button>
+                        ${GROUP_NAMES.map((dayName, dayIdx) => `
+                            <button onclick="setPoolDayFilter(${dayIdx})" class="text-[11px] px-2.5 py-1 rounded transition border ${poolDayFilter === dayIdx ? 'bg-blue-600 border-blue-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">${dayName}</button>
+                        `).join("")}
+                    </div>
+                    ` : ""}
 
                     <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-900 pt-2">
                         <span class="text-xs text-slate-400 mr-1 font-semibold">職業篩選：</span>
@@ -625,7 +1462,7 @@
             let html = `
                 <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
                     <div class="mb-3 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                        <h2 class="text-lg font-bold text-slate-200">👥 總名單成員</h2>
+                        <h2 class="text-lg font-bold text-slate-200">👥 成員</h2>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button onclick="sortPoolBy('level')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">等級 ${getIcon('level')}</button>
                             <button onclick="sortPoolBy('job')" class="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">職業 ${getIcon('job')}</button>
@@ -633,7 +1470,7 @@
                         </div>
                     </div>
                     ${filterBarHtml}
-                    <div id="pool-list-master" data-list-type="pool" class="sortable-list flex flex-col gap-2 min-h-[80px]">
+                    <div id="pool-list-${idSuffix}" data-list-type="pool" class="sortable-list flex flex-col gap-2 min-h-[80px]">
             `;
 
             if (displayPool.length === 0) {
@@ -667,17 +1504,17 @@
                                 </select>
 
                                 <div class="flex items-center gap-1.5">
-                                    <label class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border cursor-pointer ${player.treeKing ? 'bg-emerald-950 border-emerald-600 text-emerald-300 font-bold' : 'bg-slate-900 border-slate-800 text-slate-500'}">
-                                        <input type="checkbox" ${player.treeKing ? "checked" : ""} onchange="updatePlayerTag('${player.id}', 'treeKing', this.checked)"> 樹王
-                                    </label>
-                                    <label class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border cursor-pointer ${player.dragonKing ? 'bg-amber-950 border-amber-500 text-amber-300 font-bold' : 'bg-slate-900 border-slate-800 text-slate-500'}">
-                                        <input type="checkbox" ${player.dragonKing ? "checked" : ""} onchange="updatePlayerTag('${player.id}', 'dragonKing', this.checked)"> 龍王
-                                    </label>
+                                    ${SHARED_TAGS.map(tag => `
+                                        <label class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border cursor-pointer ${player[tag.key] ? tag.playerClass + ' font-bold' : 'bg-slate-900 border-slate-800 text-slate-500'}">
+                                            <input type="checkbox" ${player[tag.key] ? "checked" : ""} onchange="updatePlayerTag('${player.id}', '${tag.key}', this.checked)"> ${escapeHtml(tag.filterLabel)}
+                                        </label>
+                                    `).join('')}
                                 </div>
 
                                 <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-35 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
                             </div>
                             <div class="flex items-center gap-1 shrink-0 ml-2">
+                                ${!isMasterView ? teams.map((t, tIdx) => `<button onclick="sendToTeam('${player.id}', ${tIdx},${isTeams2})" class="rounded border border-blue-900 bg-blue-950 px-2 py-1 text-xs text-blue-300">+${escapeHtml(t.name)}</button>`).join('') : ''}
                                 <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
                             </div>
                         </div>
@@ -689,15 +1526,18 @@
         }
 
         // ==========================================
-        // 10. 拖曳元件初始化 (Sortable.js)
+        // 10. 拖曳元件初始化
+        // Sortable.js 負責總名單 ↔ 隊伍之間的拖曳。
         // ==========================================
         function initSortables() {
             sortableInstances.forEach(i => i.destroy());
             sortableInstances = [];
             
             document.querySelectorAll(".sortable-list").forEach(el => {
+                if (el.closest(".hidden")) return;
+                
                 const inst = new Sortable(el, {
-                    group: "artale-shared-lists",
+                    group: { name: "artale-shared-lists", pull: (to, from) => from.el.dataset.listType === "pool" ? "clone" : true },
                     draggable: ".drag-item",
                     animation: 150,
                     filter: "input, button, select",
@@ -705,17 +1545,54 @@
                     ghostClass: "sortable-ghost",
                     dragClass: "sortable-drag",
                     onEnd: function(evt) {
+                        const fromType = evt.from.dataset.listType;
+                        const toType = evt.to.dataset.listType;
                         const itemId = evt.item?.dataset?.id;
                         const newIndex = evt.newDraggableIndex ?? evt.newIndex;
-                        if (!itemId || evt.oldDraggableIndex === newIndex) return;
+                        
+                        if (!itemId || (fromType === toType && evt.oldDraggableIndex === newIndex)) return;
 
                         transactionUpdate(data => {
                             const p = data.pool.find(item => String(item.id) === String(itemId));
                             if (!p) return false;
                             
-                            data.pool = data.pool.filter(item => String(item.id) !== String(itemId));
-                            data.pool.splice(newIndex, 0, p);
-                            return true;
+                            if (fromType === "pool" && toType === "pool") {
+                                data.pool = data.pool.filter(item => String(item.id) !== String(itemId));
+                                data.pool.splice(newIndex, 0, p);
+                                return true;
+                            }
+                            
+                            const wData = data.weeksData[state.activeWeek];
+                            const isT2 = toType.startsWith("team2_");
+                            const groupsArr = isT2 ? wData.groups2 : wData.groups;
+                            const targetGroup = groupsArr[isT2 ? state.activeGroup2 : state.activeGroup];
+                            
+                            if (fromType === "pool" && (toType.startsWith("team_") || toType.startsWith("team2_"))) {
+                                const tIdx = parseInt(toType.replace(/team2?_/, ""), 10);
+                                if (hasReachedWeeklyLimit(p, wData)) { 
+                                    alert("已達本週出賽上限！"); 
+                                    return false; 
+                                }
+                                const newMember = { ...p };
+                                if (isT2) newMember.note = "";
+                                targetGroup.teams[tIdx].members.splice(newIndex, 0, newMember);
+                                return true;
+                            }
+                            
+                            if ((fromType.startsWith("team_") || fromType.startsWith("team2_")) && (toType.startsWith("team_") || toType.startsWith("team2_"))) {
+                                const fromIsT2 = fromType.startsWith("team2_");
+                                const fromGroups = fromIsT2 ? wData.groups2 : wData.groups;
+                                const sTeam = fromGroups[fromIsT2 ? state.activeGroup2 : state.activeGroup].teams[parseInt(fromType.replace(/team2?_/, ""), 10)].members;
+                                const tTeam = targetGroup.teams[parseInt(toType.replace(/team2?_/, ""), 10)].members;
+                                const idx = sTeam.findIndex(item => String(item.id) === String(itemId));
+                                
+                                if (idx > -1) {
+                                    const [moved] = sTeam.splice(idx, 1);
+                                    tTeam.splice(newIndex, 0, moved);
+                                    return true;
+                                }
+                            }
+                            return false;
                         });
                     }
                 });
@@ -724,14 +1601,319 @@
         }
 
         // ==========================================
-        // 11. 主渲染進入點 (Main Render Routine)
+        // 11. 圖片匯出與 Modal 功能
+        // 產生隊伍圖片、預覽、複製與下載。
+        // ==========================================
+        function formatShareHeader(isTeams2 = false) {
+            return `
+                <div class="share-row-item" style="border-bottom: 1px solid #334155; padding-bottom: 2px; margin-bottom: 4px; font-weight: 700; color: #94a3b8; font-size: 13px;">
+                    <div class="share-col-level">等級</div>
+                    <div class="share-col-job">職業</div>
+                    <div class="share-col-name">名字</div>
+                    <div class="share-col-part">${isTeams2 ? '位置' : '場次'}</div>
+                </div>
+            `;
+        }
+
+        function formatShareLine(player, isTeams2 = false) {
+            const level = getPlayerLevel(player);
+            let nameStr = player.name || "";
+            if (nameStr.length > 7) {
+                nameStr = nameStr.slice(0, 7);
+            }
+
+            let lastColText = "";
+            if (isTeams2) {
+                lastColText = player.note || "";
+            } else {
+                if (player.part === "first") lastColText = "前7場";
+                else if (player.part === "second") lastColText = "後7場";
+            }
+
+            return `
+                <div class="share-row-item">
+                    <div class="share-col-level">${escapeHtml(level || "---")}</div>
+                    <div class="share-col-job">${escapeHtml(player.job || "")}</div>
+                    <div class="share-col-name">${escapeHtml(nameStr)}</div>
+                    <div class="share-col-part">${escapeHtml(lastColText)}</div>
+                </div>
+            `;
+        }
+
+        let imageGenSelectedIndices = [];
+        let imageGenerationToken = 0;
+        // 圖片內標題：可在預覽視窗自行輸入，例如「樹王團」或「龍王團」。
+        let imageExportTitle = "";
+
+        function renderImageDayButtons() {
+            const container = document.getElementById("image-day-buttons");
+            if (!container) return;
+
+            const wData = currentWeekData();
+            const groupsArr = pendingImageGenIsTeams2 ? wData.groups2 : wData.groups;
+            let html = "";
+
+            groupsArr.forEach((group, gIdx) => {
+                const teams = group.teams || [];
+                const hasTeamWithMembers = teams.some(t => (t.members || []).length > 0);
+                const selected = imageGenSelectedIndices.includes(gIdx);
+                const dayName = GROUP_NAMES[gIdx];
+                const dateStr = group.date ? ` (${group.date})` : "";
+
+                html += `
+                    <button onclick="toggleImageDay(${gIdx})"
+                        ${hasTeamWithMembers ? '' : 'disabled'}
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700'} ${hasTeamWithMembers ? '' : 'opacity-60 cursor-not-allowed'}">
+                        ${dayName}${dateStr}
+                    </button>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function openImageGenModal(isTeams2 = false) {
+            pendingImageGenIsTeams2 = isTeams2;
+            const wData = currentWeekData();
+            const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+
+            imageGenSelectedIndices = [];
+            groupsArr.forEach((group, gIdx) => {
+                const teams = group.teams || [];
+                if (teams.some(t => (t.members || []).length > 0)) {
+                    imageGenSelectedIndices.push(gIdx);
+                }
+            });
+
+            await generateSelectedTeamsImage(false);
+        }
+
+        function toggleImageDay(gIdx) {
+            const index = imageGenSelectedIndices.indexOf(gIdx);
+            if (index > -1) {
+                imageGenSelectedIndices.splice(index, 1);
+            } else {
+                imageGenSelectedIndices.push(gIdx);
+            }
+
+            renderImageDayButtons();
+            generateSelectedTeamsImage(true);
+        }
+
+        async function generateSelectedTeamsImage(showAlertOnEmpty = true) {
+            const generationToken = ++imageGenerationToken;
+            const isTeams2 = pendingImageGenIsTeams2;
+            const selectedIndices = [...imageGenSelectedIndices].sort((a, b) => a - b);
+
+            if (selectedIndices.length === 0) {
+                if (showAlertOnEmpty) alert("請至少選擇一個要產生的日期！");
+                return false;
+            }
+
+            if (typeof html2canvas === "undefined") return false;
+            const shareCard = document.getElementById("share-card");
+            const wData = currentWeekData();
+            const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
+            let columnsHtml = "", count = 0;
+            const exportTitle = String(imageExportTitle || "").trim();
+            const titleHtml = exportTitle
+                ? `<div class="share-export-title">${escapeHtml(exportTitle)}</div>`
+                : "";
+
+            selectedIndices.forEach((gIdx) => {
+                const group = groupsArr[gIdx];
+                if (!group) return;
+                const teams = group.teams || [];
+                if (!teams.some(t => (t.members || []).length > 0)) return;
+
+                let colHtml = `<div class="share-group-column"><div class="share-group-header-text">${escapeHtml(group.date ? `${GROUP_NAMES[gIdx]} -${group.date}` : GROUP_NAMES[gIdx])}</div>`;
+                teams.forEach((team) => {
+                    if ((team.members || []).length > 0) {
+                        colHtml += `<div class="share-team-wrapper"><div class="share-team-title-text">${team.emoji || "⚔️"} ${escapeHtml(team.name)} (${escapeHtml(team.time || "20:00")}) (${team.members.length}人)${team.con ? " (連14場)" : " (連7場)"}</div>`;
+                        colHtml += formatShareHeader(isTeams2);
+                        team.members.forEach((p, pIdx) => {
+                            if (isTeams2 && pIdx > 0 && pIdx % 6 === 0) {
+                                colHtml += `<div class="share-divider-line"></div>`;
+                            }
+                            colHtml += formatShareLine(p, isTeams2);
+                        });
+                        colHtml += `</div>`;
+                    }
+                });
+                colHtml += `</div>`;
+                columnsHtml += colHtml;
+                count++;
+            });
+
+            if (count === 0) {
+                if (showAlertOnEmpty) alert("所選的日期中無任何隊伍可產生圖片！");
+                return false;
+            }
+
+            shareCard.innerHTML = `<div class="share-card-inner">${titleHtml}<div class="share-export-columns">${columnsHtml}</div></div>`;
+            try {
+                await new Promise(r => requestAnimationFrame(r));
+                const canvas = await html2canvas(shareCard.firstElementChild, { scale: 2, useCORS: true, backgroundColor: "#111111", logging: false });
+
+                // 如果使用者已經切換到新的日期選擇，忽略這次較晚完成的舊圖片。
+                if (generationToken !== imageGenerationToken) return false;
+
+                previewImages = [{ title: `${exportTitle ? exportTitle + " - " : ""}${isTeams2 ? '12人' : '6人'}全部隊伍 (${getWeekDisplayTitle(state.activeWeek)})`, dataUrl: canvas.toDataURL("image/png") }];
+            } catch(e) {
+                if (generationToken === imageGenerationToken) {
+                    alert("圖片產生失敗，請稍後再試！");
+                }
+                return false;
+            } finally {
+                if (generationToken === imageGenerationToken) {
+                    shareCard.innerHTML = "";
+                }
+            }
+
+            if (generationToken !== imageGenerationToken) return false;
+
+            currentImageIndex = 0;
+            renderImageDayButtons();
+            showModal();
+            return true;
+        }
+
+        function showModal() {
+            updateModalContent();
+            updateImageTitleTags();
+            document.getElementById("image-modal").classList.remove("hidden");
+        }
+
+        // 圖片標籤採用「篩選標籤」樣式，點擊後立即重新產生圖片。
+        // 新增標籤時，只要在 Modal 的 image-title-tag 區塊新增一個 button 即可。
+        async function applyImageExportTitle(title) {
+            imageExportTitle = String(title || "").trim();
+            updateImageTitleTags();
+            await generateSelectedTeamsImage(false);
+        }
+
+        function updateImageTitleTags() {
+            const container = document.getElementById('image-export-title');
+            if (!container) return;
+
+            const tags = [
+                { label: '不顯示', value: '' },
+                ...SHARED_TAGS.map(tag => ({ label: tag.imageLabel, value: tag.imageLabel }))
+            ];
+
+            container.innerHTML = tags.map(tag => {
+                const selected = String(tag.value) === String(imageExportTitle || '');
+                return `
+                    <button type="button" data-image-title="${escapeHtml(tag.value)}" onclick="applyImageExportTitle('${String(tag.value).replaceAll("'", "\\'")}')"
+                        class="image-title-tag rounded-full border px-3 py-1.5 text-xs font-bold transition ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-blue-500 hover:text-white'}">
+                        ${escapeHtml(tag.label)}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function closeModal() { 
+            document.getElementById("image-modal").classList.add("hidden"); 
+        }
+
+        function updateModalContent() {
+            const item = previewImages[currentImageIndex];
+            if (!item) return;
+            document.getElementById("modal-img").src = item.dataUrl;
+            document.getElementById("modal-title").innerText = `圖片預覽 - ${item.title}`;
+        }
+
+        async function copyModalImage() {
+            const btn = document.getElementById("btn-copy-img");
+            try {
+                const blob = await (await fetch(previewImages[currentImageIndex].dataUrl)).blob();
+                await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+                btn.innerText = "✓ 已複製！";
+                setTimeout(() => btn.innerText = "📋 複製圖片", 1500);
+            } catch(e) { 
+                btn.innerText = "✕ 失敗"; 
+            }
+        }
+
+        function downloadModalImage() {
+            const link = document.createElement("a");
+            link.download = `Artale_${previewImages[currentImageIndex].title}.png`;
+            link.href = previewImages[currentImageIndex].dataUrl;
+            link.click();
+        }
+
+        // ==========================================
+        // 12. 主渲染進入點
+        // 根據目前分頁、週別與隊伍資料更新整個畫面。
         // ==========================================
         function render() {
             const weekKeys = getAvailableWeekKeys();
             document.getElementById("week-select").innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
             
+            const wData = currentWeekData();
+            
+            let totalM = 0; 
+            (wData.groups || []).forEach(g => (g.teams || []).forEach(t => totalM += (t.members?.length || 0)));
+
+            let totalM2 = 0; 
+            (wData.groups2 || []).forEach(g => (g.teams || []).forEach(t => totalM2 += (t.members?.length || 0)));
+
             document.getElementById("master-tab-badge").innerText = `${state.pool.length}人`;
-            document.getElementById("master-view-container").innerHTML = renderPool();
+            document.getElementById("teams-tab-badge").innerText = `${totalM}/18`;
+            document.getElementById("teams2-tab-badge").innerText = `${totalM2}/18`;
+
+            const curGroup6 = currentGroup(false);
+            const curGroup12 = currentGroup(true);
+
+            document.getElementById("current-teams-count").innerText = (curGroup6.teams || []).length;
+            const count2 = document.getElementById("current-teams-count-2");
+            if (count2) count2.innerText = (curGroup12.teams || []).length;
+
+            const isMaster = currentTab === "master";
+            const isTeams = currentTab === "teams";
+            const isTeams2 = currentTab === "teams2";
+
+            document.getElementById("tab-btn-master").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isMaster ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
+            document.getElementById("tab-btn-teams").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isTeams ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
+            document.getElementById("tab-btn-teams2").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isTeams2 ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
+
+            document.getElementById("tab-content-master").classList.toggle("hidden", !isMaster);
+            document.getElementById("tab-content-teams").classList.toggle("hidden", !isTeams);
+            document.getElementById("tab-content-teams2").classList.toggle("hidden", !isTeams2);
+
+            if (isMaster) {
+                document.getElementById("master-view-container").innerHTML = renderPool(true, false);
+            } else if (isTeams) {
+                document.getElementById("group-tabs").innerHTML = GROUP_NAMES.map((name, i) => {
+                    const g = wData.groups[i];
+                    const active = state.activeGroup === i;
+                    return `
+                        <div class="flex items-center gap-1">
+                            <button onclick="selectGroup(${i}, false)" class="rounded-lg px-4 py-2 text-xs font-bold transition ${active ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                                ${name}
+                            </button>
+                            <input type="text" value="${escapeHtml(g.date || '')}" placeholder="日期" onchange="updateGroupDate(${i}, this.value, false)" class="w-14 rounded border border-slate-700 bg-slate-950 px-1 py-2 text-center text-xs text-slate-300">
+                        </div>
+                    `;
+                }).join("");
+                document.getElementById("teams-cards-container").innerHTML = renderTeamsContainer(false);
+                document.getElementById("teams-pool-container").innerHTML = renderPool(false, false);
+            } else if (isTeams2) {
+                document.getElementById("group-tabs-2").innerHTML = GROUP_NAMES.map((name, i) => {
+                    const g = wData.groups2[i];
+                    const active = state.activeGroup2 === i;
+                    return `
+                        <div class="flex items-center gap-1">
+                            <button onclick="selectGroup(${i}, true)" class="rounded-lg px-4 py-2 text-xs font-bold transition ${active ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                                ${name}
+                            </button>
+                            <input type="text" value="${escapeHtml(g.date || '')}" placeholder="日期" onchange="updateGroupDate(${i}, this.value, true)" class="w-14 rounded border border-slate-700 bg-slate-950 px-1 py-2 text-center text-xs text-slate-300">
+                        </div>
+                    `;
+                }).join("");
+                document.getElementById("teams-cards-container-2").innerHTML = renderTeamsContainer(true);
+                document.getElementById("teams-pool-container-2").innerHTML = renderPool(false, true);
+            }
 
             setTimeout(initSortables, 50);
         }
