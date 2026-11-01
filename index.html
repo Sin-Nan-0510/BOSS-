@@ -56,7 +56,13 @@
 
             main,
             #master-view-container,
+            #teams-cards-container,
+            #teams-cards-container-2,
+            #teams-pool-container,
+            #teams-pool-container-2,
             #tab-content-master,
+            #tab-content-teams,
+            #tab-content-teams2,
             .sortable-list {
                 width: 100%;
                 min-width: 0;
@@ -64,7 +70,13 @@
             }
 
             /* 各主要卡片在手機上貼近螢幕邊緣，騰出更多實際內容寬度。 */
-            #master-view-container > .rounded-xl {
+            #master-view-container > .rounded-xl,
+            #teams-pool-container > .rounded-xl,
+            #teams-pool-container-2 > .rounded-xl,
+            #teams-cards-container > .rounded-xl,
+            #teams-cards-container-2 > .rounded-xl,
+            #tab-content-teams > .rounded-xl,
+            #tab-content-teams2 > .rounded-xl {
                 width: 100%;
                 max-width: 100%;
                 min-width: 0;
@@ -110,11 +122,26 @@
 
             /* 避免 iPhone Safari 聚焦小字輸入框時自動放大頁面。 */
             #master-view-container input:not([type="checkbox"]):not([type="radio"]),
-            #master-view-container select {
+            #master-view-container select,
+            #teams-cards-container input:not([type="checkbox"]):not([type="radio"]),
+            #teams-cards-container select,
+            #teams-cards-container-2 input:not([type="checkbox"]):not([type="radio"]),
+            #teams-cards-container-2 select,
+            #teams-pool-container input:not([type="checkbox"]):not([type="radio"]),
+            #teams-pool-container select,
+            #teams-pool-container-2 input:not([type="checkbox"]):not([type="radio"]),
+            #teams-pool-container-2 select {
                 font-size: 16px !important;
                 max-width: 100%;
             }
 
+            #roster-picker-modal > div,
+            #image-modal > div {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                max-height: 94dvh;
+            }
         }
         
         .share-export-title {
@@ -255,14 +282,13 @@
                 <select id="week-select" onchange="selectWeek(this.value)" class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-bold text-blue-400 focus:border-blue-500 focus:outline-none"></select>
                 <button onclick="switchWeekRelative(1)" class="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition">下一週 ▶</button>
                 <button onclick="jumpToCurrentWeek()" class="rounded-lg border border-blue-900 bg-blue-950 px-2.5 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition">回到本週</button>
-                <button id="btn-delete-week" onclick="deleteCurrentWeek()" class="hidden ml-auto shrink-0 rounded-lg border border-rose-900 bg-rose-950/80 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-900 transition">🗑️ 刪除此週</button>
             </div>
             <div class="mt-3 w-full text-xs text-slate-400">
                 💡 切換週別時，<span class="text-blue-400 font-semibold">等級/職業/名字/ADAP</span> 全週保留，僅<span class="text-emerald-400 font-semibold">填寫時間與隊伍分配</span>按週獨立。
             </div>
         </div>
 
-        <!-- 總名單頁面 -->
+        <!-- 總名單主畫面 -->
         <main class="space-y-6">
             <div id="tab-content-master" class="space-y-6">
                 <div id="master-view-container"></div>
@@ -1252,7 +1278,7 @@
             });
         }
 
-        function switchTab(tab) { currentTab = tab; render(); }
+        function switchTab() { currentTab = "master"; render(); }
         function selectGroup(idx, isTeams2 = false) { 
             if (isTeams2) state.activeGroup2 = idx;
             else state.activeGroup = idx;
@@ -2456,11 +2482,7 @@
         function renderNow() {
             const weekKeys = getAvailableWeekKeys();
             const weekSelect = document.getElementById("week-select");
-            if (!weekSelect) return;
-
-            weekSelect.innerHTML = weekKeys.map(wk =>
-                `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`
-            ).join("");
+            weekSelect.innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
 
             // 前一個日曆週沒有實際內容（或已被刪除）時，停用「上一週」。
             const previousWeekButton = document.querySelector('button[onclick="switchWeekRelative(-1)"]');
@@ -2484,10 +2506,8 @@
                 nextWeekButton.classList.toggle("cursor-not-allowed", !canGoNextWeek);
             }
 
-            // 獨立版只呈現總名單；玩家資料、篩選、排序、週別時間與同步邏輯沿用原功能。
-            const masterView = document.getElementById("master-view-container");
-            if (masterView) masterView.innerHTML = renderPool(true, false);
-
+            currentTab = "master";
+            document.getElementById("master-view-container").innerHTML = renderPool(true, false);
             setTimeout(initSortables, 50);
         }
 
