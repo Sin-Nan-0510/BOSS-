@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Artale 隊伍分配</title>
+    <title>Artale 總名單</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -33,6 +33,88 @@
             opacity: 0.9;
             transform: scale(1.02);
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 手機版：卡片盡量使用完整螢幕寬度，欄位自動換行，避免需要手動縮放。 */
+        @media (max-width: 640px) {
+            html, body {
+                width: 100%;
+                min-width: 0;
+                overflow-x: hidden;
+            }
+
+            body.min-h-screen {
+                padding-left: 6px !important;
+                padding-right: 6px !important;
+            }
+
+            body > .mx-auto.max-w-7xl {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+            }
+
+            main,
+            #master-view-container,
+            #tab-content-master,
+            .sortable-list {
+                width: 100%;
+                min-width: 0;
+                max-width: 100%;
+            }
+
+            /* 各主要卡片在手機上貼近螢幕邊緣，騰出更多實際內容寬度。 */
+            #master-view-container > .rounded-xl {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                padding: 12px !important;
+            }
+
+            .master-player-row {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+                overflow: hidden;
+            }
+
+            .master-player-fields {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+            }
+
+            .master-availability-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                width: 100%;
+                min-width: 0;
+            }
+
+            .master-availability-grid select {
+                width: 100%;
+                max-width: 100%;
+                min-width: 0;
+            }
+
+            .master-tag-options {
+                display: flex;
+                flex-wrap: wrap;
+                width: 100%;
+                min-width: 0;
+            }
+
+            .master-tag-options label {
+                white-space: nowrap;
+            }
+
+            /* 避免 iPhone Safari 聚焦小字輸入框時自動放大頁面。 */
+            #master-view-container input:not([type="checkbox"]):not([type="radio"]),
+            #master-view-container select {
+                font-size: 16px !important;
+                max-width: 100%;
+            }
+
         }
         
         .share-export-title {
@@ -161,7 +243,7 @@
     <div class="mx-auto max-w-7xl">
         <!-- 頂部標題區 -->
         <header class="mb-6 text-center">
-            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 隊伍分配</h1>
+            <h1 class="mb-2 text-3xl font-bold tracking-wide text-blue-400 md:text-4xl">Artale 總名單</h1>
             <p id="sync-status" class="mt-1 text-[11px] text-slate-500">☁ Firebase 連線中...</p>
         </header>
 
@@ -180,133 +262,12 @@
             </div>
         </div>
 
-        <!-- 分頁切換區塊 -->
-        <div class="mb-6 grid grid-cols-1 gap-2 rounded-xl border border-slate-800 bg-slate-900/90 p-1.5 shadow-md">
-            <button id="tab-btn-master" onclick="switchTab('master')" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
-                <span>📋</span> 總名單 <span id="master-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0人</span>
-            </button>
-            <button id="tab-btn-teams" onclick="switchTab('teams')" style="display:none" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
-                <span>⚔️</span> 6人隊伍分配 <span id="teams-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0/18</span>
-            </button>
-            <button id="tab-btn-teams2" onclick="switchTab('teams2')" style="display:none" class="flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200">
-                <span>⚔</span> 12人隊伍分配 <span id="teams2-tab-badge" class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-300">0/18</span>
-            </button>
-        </div>
-
-        <!-- 主內容區 -->
+        <!-- 總名單頁面 -->
         <main class="space-y-6">
-            <!-- 總名單頁面 -->
-            <div id="tab-content-master" class="space-y-6 hidden">
+            <div id="tab-content-master" class="space-y-6">
                 <div id="master-view-container"></div>
             </div>
-
-            <!-- 隊伍分配頁面 1 (6人) -->
-            <div id="tab-content-teams" class="space-y-6 hidden">
-                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <h2 class="text-base font-bold text-slate-200">遠征團管理 (6人)</h2>
-                    </div>
-                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <button onclick="openImageGenModal(false)" class="rounded-lg border border-blue-900 bg-blue-950/50 px-4 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-900/50">🖼️ 產生全部團隊圖片</button>
-                    </div>
-                    <div id="group-tabs" class="mt-4 flex flex-wrap gap-3"></div>
-                </div>
-
-                <!-- 隊伍管理操作列 -->
-                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-sm">
-                    <div class="text-xs text-slate-400">
-                        📌 當前遠征團共有 <span id="current-teams-count" class="text-blue-400 font-bold">3</span> 支隊伍
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="addTeamToCurrentGroup(false)" class="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition">➕ 新增隊伍</button>
-                        <button onclick="removeTeamFromCurrentGroup(false)" class="rounded-lg border border-rose-900 bg-rose-950/60 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-900 transition">➖ 減少最後一隊</button>
-                    </div>
-                </div>
-
-                <div id="teams-cards-container" class="space-y-6"></div>
-                <div id="teams-pool-container"></div>
-
-                <!-- 危險操作移至頁面最底部，避免誤觸 -->
-                <div class="flex justify-end border-t border-slate-800/70 pt-4">
-                    <button onclick="clearCurrentGroup(false)" class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-500 transition hover:border-rose-900 hover:bg-rose-950/40 hover:text-rose-300">🧹 清空當前團隊伍</button>
-                </div>
-            </div>
-
-            <!-- 隊伍分配頁面 2 (12人，兩欄式緊湊版面) -->
-            <div id="tab-content-teams2" class="space-y-6 hidden">
-                <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <h2 class="text-base font-bold text-slate-200">遠征團管理 (12人)</h2>
-                    </div>
-                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <button onclick="openImageGenModal(true)" class="rounded-lg border border-blue-900 bg-blue-950/50 px-4 py-3 text-sm font-bold text-blue-300 transition hover:bg-blue-900/50">🖼️ 產生全部團隊圖片</button>
-                    </div>
-                    <div id="group-tabs-2" class="mt-4 flex flex-wrap gap-3"></div>
-                </div>
-
-                <!-- 隊伍管理操作列 -->
-                <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-sm">
-                    <div class="text-xs text-slate-400">
-                        📌 當前遠征團共有 <span id="current-teams-count-2" class="text-blue-400 font-bold">3</span> 支隊伍
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="addTeamToCurrentGroup(true)" class="rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50 transition">➕ 新增隊伍</button>
-                        <button onclick="removeTeamFromCurrentGroup(true)" class="rounded-lg border border-rose-900 bg-rose-950/60 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-900 transition">➖ 減少最後一隊</button>
-                    </div>
-                </div>
-
-                <div id="teams-cards-container-2" class="space-y-6"></div>
-                <div id="teams-pool-container-2"></div>
-
-                <!-- 危險操作移至頁面最底部，避免誤觸 -->
-                <div class="flex justify-end border-t border-slate-800/70 pt-4">
-                    <button onclick="clearCurrentGroup(true)" class="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-500 transition hover:border-rose-900 hover:bg-rose-950/40 hover:text-rose-300">🧹 清空當前團隊伍</button>
-                </div>
-            </div>
         </main>
-    </div>
-
-    <!-- 圖片匯出暫存容器 -->
-    <div id="share-card"></div>
-
-    <!-- 從總名單快速挑選成員 -->
-    <div id="roster-picker-modal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/75 backdrop-blur-sm p-3 md:p-6">
-        <div class="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-            <div class="flex items-center justify-between gap-3 border-b border-slate-700 px-5 py-4">
-                <div>
-                    <h3 id="roster-picker-title" class="text-lg font-bold text-slate-100">從總名單加入成員</h3>
-                    <p class="mt-1 text-xs text-slate-400">可用職業篩選或搜尋名字，按「＋加入」即可加入目前隊伍。</p>
-                </div>
-                <button onclick="closeRosterPicker()" class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
-            </div>
-            <div class="space-y-3 border-b border-slate-800 p-4">
-                <input id="roster-picker-search" type="search" oninput="updateRosterPickerQuery(this.value)" placeholder="搜尋玩家名稱、職業或等級…" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-blue-500">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div class="space-y-2"><div id="roster-picker-jobs" class="flex flex-wrap gap-2"></div><div id="roster-picker-tags" class="flex flex-wrap gap-2"></div></div>
-                    <label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-200">
-                        <input id="roster-picker-available-only" type="checkbox" onchange="toggleRosterPickerAvailableOnly(this.checked)" class="accent-emerald-500">
-                        <span id="roster-picker-available-label">只顯示當週有填時間</span>
-                    </label>
-                </div>
-            </div>
-            <div id="roster-picker-list" class="min-h-0 flex-1 overflow-auto p-3"></div>
-            <div class="flex items-center justify-between border-t border-slate-800 px-4 py-3">
-                <span id="roster-picker-count" class="text-xs text-slate-400"></span>
-                <button onclick="closeRosterPicker()" class="rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700">完成</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 圖片預覽 Modal -->
-    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <div class="relative flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
-            <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 id="modal-title" class="text-lg font-bold text-slate-100">團隊圖片預覽</h3>
-                <button onclick="closeModal()" class="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
-            </div>
-            <p class="mb-3 text-xs text-slate-400">系統會依照隊伍標籤自動產生多張圖片。可在每張圖片下方個別選擇日期，再複製或下載該張圖片。</p>
-            <div id="image-list" class="min-h-0 flex-1 space-y-5 overflow-y-auto rounded-lg bg-slate-950 p-3"></div>
-        </div>
     </div>
 
     <!-- Firebase SDK -->
@@ -331,6 +292,8 @@
         const FIREBASE_PATH = "artale_party_state_v3";
         const STORAGE_KEY = "artale_party_local_v3";
         const MAX_GROUPS = 7;
+        // 週別最多只能往「本週」之後建立／切換 4 週。
+        const MAX_FUTURE_WEEKS = 4;
         const GROUP_NAMES = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const WEEKDAYS = ["週二", "週三", "週四", "週五", "週六", "週日", "週一"];
         const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
@@ -364,7 +327,7 @@
         // activeClass：標籤被選取時的顏色
         // ========================================== 
         const SHARED_TAGS = [
-            { key: "fireDemon", filterLabel: "炎魔", imageLabel: "殘暴炎魔", activeClass: "bg-orange-500 border-orange-400 text-white", playerClass: "bg-orange-950 border-orange-600 text-orange-300" },
+            { key: "fireDemon", filterLabel: "炎魔", imageLabel: "『殘暴炎魔』", activeClass: "bg-orange-500 border-orange-400 text-white", playerClass: "bg-orange-950 border-orange-600 text-orange-300" },
             { key: "treeKing", filterLabel: "樹王", imageLabel: "克雷塞爾『樹王』", activeClass: "bg-emerald-600 border-emerald-500 text-white", playerClass: "bg-emerald-950 border-emerald-600 text-emerald-300" },
             { key: "dragonKing", filterLabel: "龍王", imageLabel: "闇黑龍王『龍王』", activeClass: "bg-gray-600 border-gray-400 text-white", playerClass: "bg-gray-700 border-gray-500 text-gray-100" },
             { key: "hardLotus", filterLabel: "困拉", imageLabel: "『困難拉圖斯』", activeClass: "bg-pink-600 border-pink-500 text-white", playerClass: "bg-pink-950 border-pink-600 text-pink-300" },
@@ -565,7 +528,9 @@
                 dragonKing: Boolean(player.dragonKing), 
                 ...Object.fromEntries(SHARED_TAGS.map(tag => [tag.key, Boolean(player[tag.key])])),
                 availability: normalizePlayerAvailability(player.availability, wk),
-                note: String(player.note || player["備註"] || "").trim()
+                note: String(player.note || player["備註"] || "").trim(),
+                // 12人隊伍專用的「位置」欄位，與總名單「備註」完全分離。
+                teamPosition: String(player.teamPosition || "").trim()
             };
         }
 
@@ -818,12 +783,58 @@
             );
         }
 
+        // 龍王例外：只要玩家已經排進任一龍王隊伍，就從可安排名單隱藏。
+        function isPlayerAssignedToDragonKing(playerId, weekData) {
+            if (!weekData?.groups2) return false;
+
+            return weekData.groups2.some(group =>
+                (group.teams || []).some(team =>
+                    String(team.tag || '') === 'dragonKing' &&
+                    (team.members || []).some(member => String(member.id) === String(playerId))
+                )
+            );
+        }
+
         function hasReachedWeeklyLimit(player, weekData) {
             const rounds = String(player.rounds || "7");
             const assignedCount = getPlayerWeeklyTeamCount(player.id, weekData);
             if (rounds === "14" && assignedCount >= 2) return true;
             if (rounds === "7" && assignedCount >= 1) return true;
             return false;
+        }
+
+        // 依「成員場次」與「目標隊伍」判斷是否可以加入。
+        // 一般隊伍：連7場 = 1、連14場 = 2。
+        // 龍王例外：不論隊伍設定連7或連14，7場／14場成員都可以加入；
+        // 一旦排進龍王，該成員本週的可安排額度一次用完，之後從名單隱藏。
+        function getTeamAssignmentCost(team, player = null) {
+            if (!team) return 1;
+            if (String(team.tag || "") === "dragonKing" && player) {
+                return String(player.rounds || "7") === "14" ? 2 : 1;
+            }
+            return team.con ? 2 : 1;
+        }
+
+        function canPlayerBeAddedToTeam(player, team, weekData, sourceTeam = null) {
+            if (!player || !team || !weekData) return false;
+
+            const rounds = String(player.rounds || "7");
+            const limit = rounds === "14" ? 2 : 1;
+            const isDragonKing = String(team.tag || "") === "dragonKing";
+
+            // 龍王：同一玩家排進去後不可再安排第二次。
+            if (isDragonKing && isPlayerAssignedToDragonKing(player.id, weekData) && String(sourceTeam?.tag || "") !== "dragonKing") return false;
+
+            const cost = getTeamAssignmentCost(team, player);
+
+            let assignedCount = getPlayerWeeklyTeamCount(player.id, weekData);
+
+            // 拖曳「隊伍 → 隊伍」時，先扣掉原本來源隊伍占用的場次。
+            if (sourceTeam) {
+                assignedCount = Math.max(0, assignedCount - getTeamAssignmentCost(sourceTeam, player));
+            }
+
+            return assignedCount + cost <= limit;
         }
 
         function sortPoolBy(field) {
@@ -1074,11 +1085,16 @@
 
         function getAvailableWeekKeys() {
             const deleted = new Set((state.deletedWeeks || []).map(String));
-            const set = new Set(Object.keys(state.weeksData || {}).filter(wk => !deleted.has(String(wk))));
-            const base = getTuesdayOfWeek();
-            // 只提供本週與未來兩週的快速建立入口，不再自動加入不存在的「上週」。
-            for (let i = 0; i <= 2; i++) {
-                const d = new Date(base);
+            const baseKey = formatDateKey(getTuesdayOfWeek());
+            // 只保留「本週以前」以及「本週往後最多 4 週」的週別。
+            const set = new Set(Object.keys(state.weeksData || {}).filter(wk => {
+                if (deleted.has(String(wk))) return false;
+                const diff = Math.round((Date.parse(`${wk}T00:00:00`) - Date.parse(`${baseKey}T00:00:00`)) / 86400000);
+                return diff <= MAX_FUTURE_WEEKS * 7;
+            }));
+            // 提供本週～未來 4 週的快速建立入口。
+            for (let i = 0; i <= MAX_FUTURE_WEEKS; i++) {
+                const d = new Date(getTuesdayOfWeek());
                 d.setDate(d.getDate() + i * 7);
                 const key = formatDateKey(d);
                 if (!deleted.has(key)) set.add(key);
@@ -1091,15 +1107,32 @@
             wk = String(wk);
             if ((state.deletedWeeks || []).map(String).includes(wk)) return;
 
-            // 若選擇的是歷史週，必須已有資料；避免下拉選單把不存在的舊週建立成空白週。
+            // 未來最多只能到本週 + 4 週。
+            const currentWeekKey = formatDateKey(getTuesdayOfWeek());
+            const futureDiffDays = Math.round((Date.parse(`${wk}T00:00:00`) - Date.parse(`${currentWeekKey}T00:00:00`)) / 86400000);
+            if (futureDiffDays > MAX_FUTURE_WEEKS * 7) {
+                alert(`最多只能查看／建立本週後 ${MAX_FUTURE_WEEKS} 週的資料。`);
+                return;
+            }
+
+            // 歷史週如果不存在，禁止憑空建立。
             if (!state.weeksData?.[wk] && wk < formatDateKey(getTuesdayOfWeek())) return;
 
+            // 已存在的週別只切換本機 UI 狀態，不因「換週」本身寫入 Firebase。
+            if (state.weeksData?.[wk]) {
+                state.activeWeek = wk;
+                saveLocalState();
+                render();
+                return;
+            }
+
+            // 只有本週／未來週尚未存在時，才建立新的週資料並同步。
             transactionUpdate(data => {
                 const deleted = new Set((data.deletedWeeks || []).map(String));
                 if (deleted.has(wk)) return false;
                 data.deletedWeeks = Array.isArray(data.deletedWeeks) ? data.deletedWeeks.map(String) : [];
-                // 週別只在使用者明確選到本週／未來週時才允許建立；歷史週不得憑空建立。
                 if (!data.weeksData[wk] && wk < formatDateKey(getTuesdayOfWeek())) return false;
+
                 data.activeWeek = wk;
                 if (!data.weeksData[wk]) {
                     data.weeksData[wk] = {
@@ -1125,13 +1158,20 @@
                 return;
             }
 
-            // 下一週維持原本可往未來建立週別的行為，並跳過明確刪除的週。
+            // 下一週最多只能切到「本週 + 4 週」，並跳過明確刪除的週。
+            const currentBaseKey = formatDateKey(getTuesdayOfWeek());
+            const maxFutureKey = getWeekKeyOffset(currentBaseKey, MAX_FUTURE_WEEKS);
             let nextKey = '';
-            for (let offset = 1; offset <= 5200; offset++) {
+            for (let offset = 1; offset <= MAX_FUTURE_WEEKS; offset++) {
                 const candidate = getWeekKeyOffset(currentKey, offset);
+                if (candidate > maxFutureKey) break;
                 if (!deleted.has(candidate)) { nextKey = candidate; break; }
             }
-            if (nextKey) selectWeek(nextKey);
+            if (!nextKey) {
+                alert(`已經到最遠週別：本週後 ${MAX_FUTURE_WEEKS} 週。`);
+                return;
+            }
+            selectWeek(nextKey);
         }
 
         function jumpToCurrentWeek() {
@@ -1223,8 +1263,20 @@
             transactionUpdate(data => {
                 const wData = data.weeksData[state.activeWeek];
                 const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
-                const g = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup];
-                g.teams.push({ name: `第${g.teams.length + 1}隊`, emoji: "⚔️", time: "20:00", con: !isTeams2, members: [] });
+                const groupIdx = isTeams2 ? state.activeGroup2 : state.activeGroup;
+                const g = groupsArr?.[groupIdx];
+                if (!g) {
+                    alert("找不到目前隊伍分組，沒有新增任何資料。");
+                    return false;
+                }
+                if (!Array.isArray(g.teams)) g.teams = [];
+                g.teams.push({
+                    name: `第${g.teams.length + 1}隊`,
+                    emoji: "⚔️",
+                    time: "20:00",
+                    con: !isTeams2,
+                    members: []
+                });
                 return true;
             });
         }
@@ -1233,7 +1285,12 @@
             transactionUpdate(data => {
                 const wData = data.weeksData[state.activeWeek];
                 const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
-                const g = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup];
+                const groupIdx = isTeams2 ? state.activeGroup2 : state.activeGroup;
+                const g = groupsArr?.[groupIdx];
+                if (!g || !Array.isArray(g.teams)) {
+                    alert("找不到目前隊伍分組，沒有刪除任何資料。");
+                    return false;
+                }
                 if (g.teams.length === 0) {
                     alert("目前已經沒有隊伍！");
                     return false;
@@ -1357,6 +1414,18 @@
             });
         }
 
+        // 12人隊伍專用：位置獨立儲存，不寫入總名單的 note（備註）。
+        function updateTeamMemberPosition(tIdx, mIdx, val) {
+            transactionUpdate(data => {
+                const wData = data.weeksData[state.activeWeek];
+                const targetMember = wData.groups2[state.activeGroup2]?.teams?.[tIdx]?.members?.[mIdx];
+                if (targetMember) {
+                    targetMember.teamPosition = String(val || "");
+                }
+                return true;
+            });
+        }
+
         function updatePlayerTag(id, tagField, checked) {
             transactionUpdate(data => {
                 const p = data.pool.find(item => String(item.id) === String(id));
@@ -1443,7 +1512,17 @@
             const tagsBlank = !p.treeKing && !p.dragonKing;
             const defaultRounds = String(p.rounds || "7") === "7";
 
-            return textFieldsBlank && availabilityBlank && tagsBlank && defaultRounds;
+            // 額外安全條件：只要這個成員已經出現在任何週的任何隊伍，就不視為可清除空白。
+            const assignedSomewhere = Object.values(state.weeksData || {}).some(week => {
+                const groupsHavePlayer = groups => (groups || []).some(g =>
+                    (g.teams || []).some(t =>
+                        (t.members || []).some(m => String(m.id) === String(p.id))
+                    )
+                );
+                return groupsHavePlayer(week?.groups) || groupsHavePlayer(week?.groups2);
+            });
+
+            return textFieldsBlank && availabilityBlank && tagsBlank && defaultRounds && !assignedSomewhere;
         }
 
         function clearBlankPoolPlayers() {
@@ -1505,27 +1584,29 @@
                 const p = data.pool.find(item => String(item.id) === String(id));
                 const wData = data.weeksData[state.activeWeek];
                 const groupsArr = isTeams2 ? wData.groups2 : wData.groups;
-                const targetTeam = groupsArr[isTeams2 ? state.activeGroup2 : state.activeGroup].teams[tIdx];
-                
-                // 12 人隊伍：同一玩家本週只能存在於 12 人隊伍中的一個安排。
-                if (isTeams2 && isPlayerAssignedTo12Team(id, wData)) {
-                    alert("此玩家已排入本週 12 人隊伍，請先從原隊伍移除後再重新安排！");
+                const targetGroup = groupsArr?.[isTeams2 ? state.activeGroup2 : state.activeGroup];
+                const targetTeam = targetGroup?.teams?.[tIdx];
+                if (!p || !targetTeam) return false;
+
+                if (targetTeam.members.some(m => String(m.id) === String(id))) return false;
+
+                if (!canPlayerBeAddedToTeam(p, targetTeam, wData)) {
+                    if (String(targetTeam.tag || "") === "dragonKing") {
+                        alert("龍王例外：7／14 場成員都可以加入，排上後本週不再顯示於可安排名單。");
+                    } else {
+                        alert("此玩家的 7／14 場額度不足以加入這個隊伍。");
+                    }
                     return false;
                 }
 
-                if (hasReachedWeeklyLimit(p, wData)) {
-                    alert("此玩家本週已達出賽上限！");
-                    return false;
-                }
-                if (targetTeam.members.some(m => String(m.id) === String(id))) return false;
-                
                 const newMember = { ...p };
                 if (isTeams2) {
-                    newMember.note = "";
+                    // 12人隊伍的「位置」是隊伍內獨立欄位，不得帶入總名單備註。
+                    newMember.teamPosition = "";
                 }
 
                 targetTeam.members.push(newMember);
-                return true; 
+                return true;
             });
         }
 
@@ -1600,9 +1681,9 @@
         function renderAvailabilitySelects(player) {
             const avail = getPlayerWeekAvailability(player, state.activeWeek);
             return WEEKDAYS.map((day, i) => `
-                <div class="flex flex-col items-center">
+                <div class="flex min-w-0 flex-col items-center">
                     <span class="text-[10px] text-blue-400 font-semibold mb-0.5">${day}</span>
-                    <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200">
+                    <select onchange="updatePlayerAvailability('${player.id}', ${i}, this.value)" class="w-16 max-w-full rounded border border-slate-800 bg-slate-900 px-0.5 py-0.5 text-[11px] text-slate-200">
                         <option value="" ${!avail[i] ? "selected" : ""}></option>
                         <option value="19:30~" ${avail[i] === "19:30~" ? "selected" : ""}>19:30~</option>
                         <option value="20:00~" ${avail[i] === "20:00~" ? "selected" : ""}>20:00~</option>
@@ -1676,7 +1757,7 @@
                         
                         <input type="text" value="${escapeHtml(player.name)}" onchange="updatePlayerField('${player.id}', 'name', this.value)" class="w-28 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200 font-bold" placeholder="名字">
                         
-                        <input type="text" value="${escapeHtml(player.note || '')}" placeholder="位置" onchange="updateTeamMemberNote(${tIdx}, ${idx}, this.value, true)" class="w-40 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-yellow-300 placeholder-slate-600 font-medium">
+                        <input type="text" value="${escapeHtml(player.teamPosition || '')}" placeholder="位置" onchange="updateTeamMemberPosition(${tIdx}, ${idx}, this.value)" class="w-40 rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-yellow-300 placeholder-slate-600 font-medium">
                     </div>
                     <button onclick="removeFromTeam(${tIdx}, ${idx}, true)" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400 hover:bg-rose-950 transition ml-2">✕</button>
                 </div>
@@ -1753,8 +1834,12 @@
             const assigned = new Set((team?.members || []).map(p => String(p.id)));
             const weekData = state.weeksData?.[state.activeWeek] || {};
             const players = (state.pool || []).filter(p => {
-                // 本週已達出賽場次上限的玩家，不顯示在可加入名單中。
-                if (hasReachedWeeklyLimit(p, weekData)) return false;
+                // 龍王隊伍也顯示 7 場成員；可加入名單只先排除已用完本週額度的人。
+                // 實際加入時仍由 canPlayerBeAddedToTeam() 做最後場次檢查。
+                const rounds = String(p.rounds || "7");
+                const weeklyLimit = rounds === "14" ? 2 : 1;
+                if (getPlayerWeeklyTeamCount(p.id, weekData) >= weeklyLimit) return false;
+                if (isTeams2 && isPlayerAssignedToDragonKing(p.id, weekData)) return false;
                 if (job !== "全部職業" && p.job !== job) return false;
                 if (tag !== "全部標籤") {
                     const selectedTag = SHARED_TAGS.find(t => t.filterLabel === tag || (t.key === "treeKing" && tag === "樹王") || (t.key === "dragonKing" && tag === "龍王"));
@@ -1770,7 +1855,12 @@
             });
             const list = document.getElementById("roster-picker-list");
             const count = document.getElementById("roster-picker-count");
-            if (count) count.textContent = `符合 ${players.length} 人｜目前隊伍 ${team?.members?.length || 0} 人${availableOnly ? `｜僅顯示${dayName}有填時間` : "｜不含本週已達場次上限者"}｜已達本週場次上限者不顯示`;
+            if (count) {
+                const ruleText = team?.tag === "dragonKing"
+                    ? "龍王：7／14 場都可加入，排上後立即從名單隱藏"
+                    : "依成員 7／14 場額度與隊伍連7／連14規則";
+                count.textContent = `符合 ${players.length} 人｜目前隊伍 ${team?.members?.length || 0} 人${availableOnly ? `｜僅顯示${dayName}有填時間` : ""}｜${ruleText}`;
+            }
             if (!list) return;
             if (!players.length) {
                 list.innerHTML = `<div class="p-10 text-center text-sm text-slate-500">沒有符合條件的玩家</div>`;
@@ -1816,11 +1906,11 @@
 
                 html += `
                     <div class="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-sm">
-                        <div class="mb-4 flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-3">
-                            <div class="flex items-center gap-3 flex-wrap">
+                        <div class="mb-4 flex min-w-0 flex-col items-stretch justify-between gap-3 border-b border-slate-800 pb-3 sm:flex-row sm:items-center">
+                            <div class="flex w-full min-w-0 items-center gap-3 flex-wrap sm:w-auto">
                                 <span class="text-lg">⚔️</span>
                                 <input type="text" value="${escapeHtml(team.name)}" onchange="updateTeamName(${tIdx}, this.value, ${isTeams2})" class="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-base font-bold text-blue-300">
-                                <input type="text" value="${escapeHtml(team.time || "20:00")}" maxlength="5" onchange="updateTeamTime(${tIdx}, this.value, ${isTeams2})" class="w-16 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400 font-bold">
+                                <input type="text" value="${escapeHtml(team.time || "20:00")}" maxlength="5" onchange="updateTeamTime(${tIdx}, this.value, ${isTeams2})" class="w-16 max-w-full rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400 font-bold">
                                 <button onclick="openRosterPicker(${tIdx}, ${isTeams2})" class="rounded-lg border border-emerald-700 bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/70 transition">＋ 從名單加入</button>
                                 <div class="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950/70 p-1">
                                     <label class="flex items-center gap-1 px-2 py-1 rounded-md cursor-pointer text-xs ${!team.con ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:bg-slate-800'}">
@@ -1830,22 +1920,22 @@
                                         <input type="radio" name="team-rounds-${isTeams2 ? '2_' : ''}${tIdx}" ${team.con ? "checked" : ""} onchange="updateTeamCon(${tIdx}, true, ${isTeams2})"> 連14場
                                     </label>
                                 </div>
-                                <select onchange="updateTeamTag(${tIdx}, this.value, ${isTeams2})" class="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-bold text-violet-200">
+                                <select onchange="updateTeamTag(${tIdx}, this.value, ${isTeams2})" class="w-full max-w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-bold text-violet-200 sm:w-auto">
                                     <option value="" ${!team.tag ? "selected" : ""}>隊伍標籤</option>
                                     ${SHARED_TAGS.map(tag => `<option value="${tag.key}" ${team.tag === tag.key ? "selected" : ""}>${tag.filterLabel}</option>`).join("")}
                                 </select>
                             </div>
 
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <div class="flex items-center gap-1 bg-slate-800/60 p-1 rounded-lg border border-slate-700">
-                                    <select id="move-to-team-${isTeams2 ? '2_' : ''}${tIdx}" class="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200">
+                            <div class="flex w-full min-w-0 items-center gap-2 flex-wrap sm:w-auto">
+                                <div class="flex max-w-full min-w-0 items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/60 p-1">
+                                    <select id="move-to-team-${isTeams2 ? '2_' : ''}${tIdx}" class="max-w-full min-w-0 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-200">
                                         ${otherTeamsOptions}
                                     </select>
                                     <button onclick="moveTeamToTeam(${tIdx}, document.getElementById('move-to-team-${isTeams2 ? '2_' : ''}${tIdx}').value, ${isTeams2})" class="rounded bg-slate-700 hover:bg-slate-600 px-2.5 py-1 text-xs font-bold text-slate-200 transition">確認轉移</button>
                                 </div>
 
-                                <div class="flex items-center gap-1 bg-blue-950/60 p-1 rounded-lg border border-blue-800/80">
-                                    <select id="move-team-select-${isTeams2 ? '2_' : ''}${tIdx}" class="rounded border border-blue-700 bg-slate-900 px-2 py-1 text-xs text-blue-300 font-bold">
+                                <div class="flex max-w-full min-w-0 items-center gap-1 rounded-lg border border-blue-800/80 bg-blue-950/60 p-1">
+                                    <select id="move-team-select-${isTeams2 ? '2_' : ''}${tIdx}" class="max-w-full min-w-0 rounded border border-blue-700 bg-slate-900 px-2 py-1 text-xs text-blue-300 font-bold">
                                         <option value="">移至其他週</option>
                                         ${otherDayOptions}
                                     </select>
@@ -1869,17 +1959,17 @@
             
             // ------------------------------------------------------
             // 待排名單顯示規則
-            // 6人頁：依原本的「本週出賽上限」過濾。
-            // 12人頁：除了原本的上限外，只要已排進 12 人隊伍，
-            // 就直接從待排名單隱藏，避免同一玩家重複安排。
-            // 總名單頁：維持顯示全部玩家。
+            // 6人、12人共用同一套成員場次邏輯：
+            // 7場成員可安排 1 次連7場；14場成員可安排 2 次連7場，
+            // 或 1 次連14場。一般隊伍依剩餘額度顯示；龍王則例外，
+            // 只要已排進龍王就從名單隱藏。
             // ------------------------------------------------------
             let displayPool = isMasterView
                 ? state.pool
                 : state.pool.filter(p => !hasReachedWeeklyLimit(p, wData));
 
             if (isTeams2 && !isMasterView) {
-                displayPool = displayPool.filter(p => !isPlayerAssignedTo12Team(p.id, wData));
+                displayPool = displayPool.filter(p => !isPlayerAssignedToDragonKing(p.id, wData));
             }
 
             if (poolJobFilters.length > 0) {
@@ -1982,8 +2072,8 @@
             } else {
                 displayPool.forEach((player, idx) => {
                     html += `
-                        <div data-id="${escapeHtml(player.id)}" data-master-player-row="${isMasterView ? "1" : "0"}" class="drag-item flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm">
-                            <div class="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                        <div data-id="${escapeHtml(player.id)}" data-master-player-row="${isMasterView ? "1" : "0"}" class="drag-item master-player-row flex min-w-0 flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+                            <div class="master-player-fields flex w-full min-w-0 flex-1 items-center gap-1.5 flex-wrap">
                                 <span class="text-xs text-slate-500">#${idx + 1}</span>
                                 
                                 <input type="text" value="${escapeHtml(getPlayerLevel(player))}" maxlength="3" onchange="updatePlayerField('${player.id}', 'level', this.value)" class="w-8 rounded border border-slate-800 bg-slate-900 px-1 py-0.5 text-center text-xs text-blue-400">
@@ -2000,14 +2090,14 @@
                                     ${renderGroupSelectOptions(player.groupId, player.id)}
                                 </select>
 
-                                <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded border border-slate-800">${renderAvailabilitySelects(player)}</div>
+                                <div class="master-availability-grid grid grid-cols-4 items-center gap-1 rounded border border-slate-800 bg-slate-900/60 p-1 sm:flex">${renderAvailabilitySelects(player)}</div>
 
                                 <select onchange="updatePlayerField('${player.id}', 'rounds', this.value)" class="rounded border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-200">
                                     <option value="7" ${player.rounds === "7" ? "selected" : ""}>7場</option>
                                     <option value="14" ${player.rounds === "14" ? "selected" : ""}>14場</option>
                                 </select>
 
-                                <div class="flex items-center gap-1.5">
+                                <div class="master-tag-options flex min-w-0 flex-wrap items-center gap-1.5">
                                     ${SHARED_TAGS.map(tag => `
                                         <label class="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border cursor-pointer ${player[tag.key] ? tag.playerClass + ' font-bold' : 'bg-slate-900 border-slate-800 text-slate-500'}">
                                             <input type="checkbox" ${player[tag.key] ? "checked" : ""} onchange="updatePlayerTag('${player.id}', '${tag.key}', this.checked)"> ${escapeHtml(tag.filterLabel)}
@@ -2015,10 +2105,10 @@
                                     `).join('')}
                                 </div>
 
-                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-35 rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400">
+                                <input type="text" value="${escapeHtml(player.note || '')}" placeholder="備註" onchange="updatePlayerField('${player.id}', 'note', this.value)" class="w-full max-w-full rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-xs text-slate-400 sm:w-[140px]">
                             </div>
-                            <div class="flex items-center gap-1 shrink-0 ml-2">
-                                ${!isMasterView ? teams.map((t, tIdx) => `<button onclick="sendToTeam('${player.id}', ${tIdx},${isTeams2})" class="rounded border border-blue-900 bg-blue-950 px-2 py-1 text-xs text-blue-300">+${escapeHtml(t.name)}</button>`).join('') : ''}
+                            <div class="flex shrink-0 items-center gap-1 self-end sm:ml-2 sm:self-auto">
+                                ${!isMasterView ? teams.map((t, tIdx) => canPlayerBeAddedToTeam(player, t, wData) ? `<button onclick="sendToTeam('${player.id}', ${tIdx},${isTeams2})" class="rounded border border-blue-900 bg-blue-950 px-2 py-1 text-xs text-blue-300">+${escapeHtml(t.name)}</button>` : '').join('') : ''}
                                 <button onclick="deletePoolPlayer('${player.id}')" class="rounded bg-slate-900 border border-slate-800 px-2 py-1 text-xs text-rose-400">✕</button>
                             </div>
                         </div>
@@ -2044,8 +2134,14 @@
                     group: { name: "artale-shared-lists", pull: (to, from) => from.el.dataset.listType === "pool" ? "clone" : true },
                     draggable: ".drag-item",
                     animation: 150,
-                    filter: "input, button, select",
+                    filter: "input, button, select, textarea, label, .no-drag",
                     preventOnFilter: false,
+                    // 手機「總名單」需長按約 2 秒才開始拖曳，降低捲動頁面時誤觸。
+                    // 其他隊伍名單維持原本較短的拖曳等待時間。
+                    delay: el.id === "pool-list-master" ? 2000 : 220,
+                    delayOnTouchOnly: true,
+                    touchStartThreshold: 10,
+                    fallbackTolerance: 8,
                     ghostClass: "sortable-ghost",
                     dragClass: "sortable-drag",
                     onEnd: function(evt) {
@@ -2073,13 +2169,21 @@
                             
                             if (fromType === "pool" && (toType.startsWith("team_") || toType.startsWith("team2_"))) {
                                 const tIdx = parseInt(toType.replace(/team2?_/, ""), 10);
-                                if (hasReachedWeeklyLimit(p, wData)) { 
-                                    alert("已達本週出賽上限！"); 
-                                    return false; 
+                                const targetTeam = targetGroup.teams[tIdx];
+
+                                if (!canPlayerBeAddedToTeam(p, targetTeam, wData)) {
+                                    alert(targetTeam?.tag === "dragonKing"
+                                        ? "龍王隊伍固定視為 14 場：只有 14 場成員可以加入，且需保留完整 14 場額度。"
+                                        : "此玩家的 7／14 場額度不足以加入這個隊伍。");
+                                    return false;
                                 }
+
                                 const newMember = { ...p };
-                                if (isT2) newMember.note = "";
-                                targetGroup.teams[tIdx].members.splice(newIndex, 0, newMember);
+                                if (isT2) {
+                                    // 從總名單拖進12人隊伍時，位置欄位一律從空白開始。
+                                    newMember.teamPosition = "";
+                                }
+                                targetTeam.members.splice(newIndex, 0, newMember);
                                 return true;
                             }
                             
@@ -2092,6 +2196,24 @@
                                 
                                 if (idx > -1) {
                                     const [moved] = sTeam.splice(idx, 1);
+                                    const sourceTeamObj = fromGroups[fromIsT2 ? state.activeGroup2 : state.activeGroup]
+                                        .teams[parseInt(fromType.replace(/team2?_/, ""), 10)];
+                                    const targetTeamObj = targetGroup.teams[parseInt(toType.replace(/team2?_/, ""), 10)];
+
+                                    if (!canPlayerBeAddedToTeam(moved, targetTeamObj, wData, sourceTeamObj)) {
+                                        sTeam.splice(idx, 0, moved);
+                                        alert(targetTeamObj?.tag === "dragonKing"
+                                            ? "龍王隊伍固定視為 14 場：只有 14 場成員可以加入，且需保留完整 14 場額度。"
+                                            : "此玩家的 7／14 場額度不足以加入這個隊伍。");
+                                        return false;
+                                    }
+
+                                    if (targetTeamObj.members.some(m => String(m.id) === String(moved.id))) {
+                                        sTeam.splice(idx, 0, moved);
+                                        alert("此玩家已存在於目標隊伍。");
+                                        return false;
+                                    }
+
                                     tTeam.splice(newIndex, 0, moved);
                                     return true;
                                 }
@@ -2128,7 +2250,8 @@
 
             let lastColText = "";
             if (isTeams2) {
-                lastColText = player.note || "";
+                // 12人隊伍圖片只取隊伍自己的「位置」，不再使用總名單備註。
+                lastColText = player.teamPosition || "";
             } else {
                 if (player.part === "first") lastColText = "前7場";
                 else if (player.part === "second") lastColText = "後7場";
@@ -2333,7 +2456,11 @@
         function renderNow() {
             const weekKeys = getAvailableWeekKeys();
             const weekSelect = document.getElementById("week-select");
-            weekSelect.innerHTML = weekKeys.map(wk => `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`).join("");
+            if (!weekSelect) return;
+
+            weekSelect.innerHTML = weekKeys.map(wk =>
+                `<option value="${wk}" ${wk === state.activeWeek ? "selected" : ""}>${getWeekDisplayTitle(wk)}</option>`
+            ).join("");
 
             // 前一個日曆週沒有實際內容（或已被刪除）時，停用「上一週」。
             const previousWeekButton = document.querySelector('button[onclick="switchWeekRelative(-1)"]');
@@ -2346,70 +2473,20 @@
                 previousWeekButton.classList.toggle("cursor-not-allowed", !canGoPreviousWeek);
             }
 
-            const wData = currentWeekData();
-            
-            let totalM = 0; 
-            (wData.groups || []).forEach(g => (g.teams || []).forEach(t => totalM += (t.members?.length || 0)));
-
-            let totalM2 = 0; 
-            (wData.groups2 || []).forEach(g => (g.teams || []).forEach(t => totalM2 += (t.members?.length || 0)));
-
-            document.getElementById("master-tab-badge").innerText = `${state.pool.length}人`;
-            document.getElementById("teams-tab-badge").innerText = `${totalM}/18`;
-            document.getElementById("teams2-tab-badge").innerText = `${totalM2}/18`;
-
-            const curGroup6 = currentGroup(false);
-            const curGroup12 = currentGroup(true);
-
-            document.getElementById("current-teams-count").innerText = (curGroup6.teams || []).length;
-            const count2 = document.getElementById("current-teams-count-2");
-            if (count2) count2.innerText = (curGroup12.teams || []).length;
-
-            const isMaster = currentTab === "master";
-            const isTeams = currentTab === "teams";
-            const isTeams2 = currentTab === "teams2";
-
-            document.getElementById("tab-btn-master").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isMaster ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
-            document.getElementById("tab-btn-teams").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isTeams ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
-            document.getElementById("tab-btn-teams2").className = `flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold transition-all duration-200 ${isTeams2 ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}`;
-
-            document.getElementById("tab-content-master").classList.toggle("hidden", !isMaster);
-            document.getElementById("tab-content-teams").classList.toggle("hidden", !isTeams);
-            document.getElementById("tab-content-teams2").classList.toggle("hidden", !isTeams2);
-
-            if (isMaster) {
-                document.getElementById("master-view-container").innerHTML = renderPool(true, false);
-            } else if (isTeams) {
-                document.getElementById("group-tabs").innerHTML = GROUP_NAMES.map((name, i) => {
-                    const g = wData.groups[i];
-                    const active = state.activeGroup === i;
-                    return `
-                        <div class="flex items-center gap-1">
-                            <button onclick="selectGroup(${i}, false)" class="rounded-lg px-4 py-2 text-xs font-bold transition ${active ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
-                                ${name}
-                            </button>
-                            <input type="text" value="${escapeHtml(g.date || '')}" placeholder="日期" onchange="updateGroupDate(${i}, this.value, false)" class="w-14 rounded border border-slate-700 bg-slate-950 px-1 py-2 text-center text-xs text-slate-300">
-                        </div>
-                    `;
-                }).join("");
-                document.getElementById("teams-cards-container").innerHTML = renderTeamsContainer(false);
-                document.getElementById("teams-pool-container").innerHTML = renderPool(false, false);
-            } else if (isTeams2) {
-                document.getElementById("group-tabs-2").innerHTML = GROUP_NAMES.map((name, i) => {
-                    const g = wData.groups2[i];
-                    const active = state.activeGroup2 === i;
-                    return `
-                        <div class="flex items-center gap-1">
-                            <button onclick="selectGroup(${i}, true)" class="rounded-lg px-4 py-2 text-xs font-bold transition ${active ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
-                                ${name}
-                            </button>
-                            <input type="text" value="${escapeHtml(g.date || '')}" placeholder="日期" onchange="updateGroupDate(${i}, this.value, true)" class="w-14 rounded border border-slate-700 bg-slate-950 px-1 py-2 text-center text-xs text-slate-300">
-                        </div>
-                    `;
-                }).join("");
-                document.getElementById("teams-cards-container-2").innerHTML = renderTeamsContainer(true);
-                document.getElementById("teams-pool-container-2").innerHTML = renderPool(false, true);
+            // 本週後最多 4 週，到了最遠週別就停用「下一週」。
+            const nextWeekButton = document.querySelector('button[onclick="switchWeekRelative(1)"]');
+            const maxFutureKey = getWeekKeyOffset(formatDateKey(getTuesdayOfWeek()), MAX_FUTURE_WEEKS);
+            const canGoNextWeek = String(state.activeWeek) < maxFutureKey;
+            if (nextWeekButton) {
+                nextWeekButton.disabled = !canGoNextWeek;
+                nextWeekButton.title = canGoNextWeek ? `最多可切換到本週後 ${MAX_FUTURE_WEEKS} 週` : `已達最遠週別（本週後 ${MAX_FUTURE_WEEKS} 週）`;
+                nextWeekButton.classList.toggle("opacity-40", !canGoNextWeek);
+                nextWeekButton.classList.toggle("cursor-not-allowed", !canGoNextWeek);
             }
+
+            // 獨立版只呈現總名單；玩家資料、篩選、排序、週別時間與同步邏輯沿用原功能。
+            const masterView = document.getElementById("master-view-container");
+            if (masterView) masterView.innerHTML = renderPool(true, false);
 
             setTimeout(initSortables, 50);
         }
