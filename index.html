@@ -317,6 +317,8 @@
 
         const FIREBASE_PATH = "artale_party_state_v3";
         const STORAGE_KEY = "artale_party_local_v3";
+        // 目前選擇的週別只存在本版本的瀏覽器本機，不寫入 Firebase。
+        const ACTIVE_WEEK_STORAGE_KEY = "artale_party_active_week_roster_v2";
         const MAX_GROUPS = 7;
         // 週別最多只能往「本週」之後建立／切換 4 週。
         const MAX_FUTURE_WEEKS = 4;
@@ -377,6 +379,9 @@
         let poolSortState = { field: null, direction: 'desc' };
         let poolJobFilters = [];
         let poolTagFilter = "all";
+        // 總名單專用篩選：僅本頁 JavaScript 狀態，不寫入 Firebase 或共用資料快取。
+        let masterGroupFilter = "all";
+        let masterUnsetTimeOnly = false;
     // 總名單名稱搜尋：僅本機介面狀態，不寫入 Firebase / localStorage。
         let masterNameQuery = "";
         let masterNameComposing = false;
@@ -431,13 +436,42 @@
         function getTuesdayOfWeek(d = new Date()) {
             const date = new Date(d);
             const day = date.getDay();
-            date.setDate(date.getDate() + ((day >= 2) ? (2 - day) : (2 - day - 7)));
+            // 週二至週一為一個規劃週；若今天是週一，預設切到明天開始的下一週。
+            const offset = day === 1 ? 1 : ((day >= 2) ? (2 - day) : (2 - day - 7));
+            date.setDate(date.getDate() + offset);
             date.setHours(0, 0, 0, 0);
             return date;
         }
 
         function formatDateKey(date) {
             return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function readLocalActiveWeek() {
+            try {
+                const value = localStorage.getItem(ACTIVE_WEEK_STORAGE_KEY);
+                return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : "";
+            } catch (e) {
+                return "";
+            }
+        }
+
+        function saveLocalActiveWeek(weekKey) {
+            try {
+                localStorage.setItem(ACTIVE_WEEK_STORAGE_KEY, String(weekKey || formatDateKey(getTuesdayOfWeek())));
+            } catch (e) {}
+        }
+
+        function resolveLocalActiveWeek(normalizedData) {
+            const defaultWeek = formatDateKey(getTuesdayOfWeek());
+            const deleted = new Set((normalizedData?.deletedWeeks || []).map(String));
+            let selected = readLocalActiveWeek() || defaultWeek;
+            // 已刪除的週別或不存在的歷史週別，回到本版本預設週；未來週可先保留本機選擇。
+            if (deleted.has(String(selected)) || (selected < defaultWeek && !normalizedData?.weeksData?.[selected])) {
+                selected = defaultWeek;
+            }
+            saveLocalActiveWeek(selected);
+            return selected;
         }
 
         function getWeekDisplayTitle(weekKey) {
@@ -654,13 +688,21 @@
 
         function applyFirebaseDataToLocal(data) {
             const norm = normalizeFirebaseData(data);
+            const localActiveWeek = resolveLocalActiveWeek(norm);
+            const localWeeksData = { ...norm.weeksData };
+            if (!localWeeksData[localActiveWeek] && !(norm.deletedWeeks || []).map(String).includes(localActiveWeek)) {
+                localWeeksData[localActiveWeek] = {
+                    groups: createDefaultWeekGroups(localActiveWeek, false),
+                    groups2: createDefaultWeekGroups(localActiveWeek, true)
+                };
+            }
             state = {
-                activeWeek: norm.activeWeek,
+                activeWeek: localActiveWeek,
                 activeGroup: Math.min(Math.max(state.activeGroup || 0, 0), MAX_GROUPS - 1),
                 activeGroup2: Math.min(Math.max(state.activeGroup2 || 0, 0), MAX_GROUPS - 1),
                 filterAvailableOnly: typeof state.filterAvailableOnly === "boolean" ? state.filterAvailableOnly : true,
                 pool: norm.pool,
-                weeksData: norm.weeksData,
+                weeksData: localWeeksData,
                 deletedWeeks: norm.deletedWeeks || []
             };
         }
@@ -680,7 +722,7 @@
         // ==========================================
         function saveLocalState() {
             try { 
-                localStorage.setItem(STORAGE_KEY, JSON.stringify({ activeWeek: state.activeWeek, pool: state.pool, weeksData: state.weeksData, deletedWeeks: state.deletedWeeks || [] })); 
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ pool: state.pool, weeksData: state.weeksData, deletedWeeks: state.deletedWeeks || [] })); 
             } catch(e) {}
         }
 
@@ -698,6 +740,14 @@
                 const ref = database.ref(FIREBASE_PATH);
                 const res = await ref.transaction(cur => {
                     const latest = normalizeFirebaseData(cur);
+                    const localWeekKey = String(state.activeWeek || formatDateKey(getTuesdayOfWeek()));
+                    const deleted = new Set((latest.deletedWeeks || []).map(String));
+                    if (!deleted.has(localWeekKey) && !latest.weeksData[localWeekKey]) {
+                        latest.weeksData[localWeekKey] = {
+                            groups: createDefaultWeekGroups(localWeekKey, false),
+                            groups2: createDefaultWeekGroups(localWeekKey, true)
+                        };
+                    }
                     return mutator(latest) === false ? cur : latest;
                 });
                 if (res?.snapshot) {
@@ -936,6 +986,16 @@
             render();
         }
 
+        function setMasterGroupFilter(val) {
+            masterGroupFilter = String(val || "all");
+            render();
+        }
+
+        function toggleMasterUnsetTimeOnly() {
+            masterUnsetTimeOnly = !masterUnsetTimeOnly;
+            render();
+        }
+
         // 總名單名稱搜尋：只改變目前頁面的 DOM 顯示，不觸發 render()。
         // 這樣中文輸入法（注音／倉頡等）在組字時不會被任何 DOM 重建打斷。
         function applyMasterNameSearch(input, event) {
@@ -1142,24 +1202,23 @@
             }
 
             // 歷史週如果不存在，禁止憑空建立。
-            if (!state.weeksData?.[wk] && wk < formatDateKey(getTuesdayOfWeek())) return;
+            if (!state.weeksData?.[wk] && wk < currentWeekKey) return;
 
-            // 已存在的週別只切換本機 UI 狀態，不因「換週」本身寫入 Firebase。
+            // 先更新本版本自己的本機週別偏好，不寫入 Firebase 的共用 activeWeek。
+            state.activeWeek = wk;
+            saveLocalActiveWeek(wk);
+
             if (state.weeksData?.[wk]) {
-                state.activeWeek = wk;
                 saveLocalState();
                 render();
                 return;
             }
 
-            // 只有本週／未來週尚未存在時，才建立新的週資料並同步。
+            // 只有本週／未來週尚未存在時，才建立新的週資料並同步；不修改 Firebase root activeWeek。
             transactionUpdate(data => {
                 const deleted = new Set((data.deletedWeeks || []).map(String));
                 if (deleted.has(wk)) return false;
-                data.deletedWeeks = Array.isArray(data.deletedWeeks) ? data.deletedWeeks.map(String) : [];
-                if (!data.weeksData[wk] && wk < formatDateKey(getTuesdayOfWeek())) return false;
-
-                data.activeWeek = wk;
+                if (!data.weeksData[wk] && wk < currentWeekKey) return false;
                 if (!data.weeksData[wk]) {
                     data.weeksData[wk] = {
                         groups: createDefaultWeekGroups(wk, false),
@@ -1167,9 +1226,16 @@
                     };
                 }
                 return true;
+            }).then(() => {
+                // Firebase listener/transaction 完成後，再套用此版本本機選取的週別。
+                if (state.weeksData?.[wk] && !(state.deletedWeeks || []).map(String).includes(wk)) {
+                    state.activeWeek = wk;
+                    saveLocalActiveWeek(wk);
+                    saveLocalState();
+                    render();
+                }
             });
         }
-
         function switchWeekRelative(delta) {
             if (!delta) return;
             const step = delta > 0 ? 1 : -1;
@@ -2009,6 +2075,21 @@
                 }
             }
 
+            // 總名單的大小號篩選：可選全部、未設定，或指定大小號。
+            if (isMasterView && masterGroupFilter !== "all") {
+                displayPool = displayPool.filter(p => {
+                    const groupId = String(p.groupId || "").trim();
+                    return masterGroupFilter === "unassigned" ? !groupId : groupId === masterGroupFilter;
+                });
+            }
+
+            // 未填時間：目前選取週別的週二至週一皆未填寫出席時間。
+            if (isMasterView && masterUnsetTimeOnly) {
+                displayPool = displayPool.filter(p =>
+                    getPlayerWeekAvailability(p, state.activeWeek).every(value => !String(value || "").trim())
+                );
+            }
+
             // 只有總名單套用名稱搜尋；搜尋條件僅存在本機介面狀態，不同步到 Firebase。
             if (isMasterView && masterNameQuery) {
                 displayPool = displayPool.filter(p =>
@@ -2036,6 +2117,21 @@
                             <button onclick="setPoolTagFilter('${tag.key}')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === tag.key ? tag.activeClass : `bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700`}">${escapeHtml(tag.filterLabel)}</button>
                         `).join('')}
                     </div>
+
+                    ${isMasterView ? `
+                    <div class="flex flex-wrap items-center gap-2 border-t border-slate-900 pt-2">
+                        <span class="text-xs text-slate-400 font-semibold">大小號：</span>
+                        <select onchange="setMasterGroupFilter(this.value)" class="max-w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-amber-300">
+                            <option value="all" ${masterGroupFilter === "all" ? "selected" : ""}>全部大小號</option>
+                            <option value="unassigned" ${masterGroupFilter === "unassigned" ? "selected" : ""}>未設定大小號</option>
+                            ${Array.from(new Set((state.pool || []).map(p => String(p.groupId || "").trim()).filter(Boolean))).sort((a, b) => Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, ""))).map(groupId => {
+                                const number = groupId.replace(/^g/i, "");
+                                return `<option value="${escapeHtml(groupId)}" ${masterGroupFilter === groupId ? "selected" : ""}>大小號 ${escapeHtml(number)}</option>`;
+                            }).join("")}
+                        </select>
+                        <button onclick="toggleMasterUnsetTimeOnly()" class="text-[11px] px-2.5 py-1 rounded transition border ${masterUnsetTimeOnly ? 'bg-amber-600 border-amber-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">未填時間${masterUnsetTimeOnly ? ' ✓' : ''}</button>
+                    </div>
+                    ` : ""}
 
                     ${!isMasterView ? `
                     <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-900 pt-2">
