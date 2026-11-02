@@ -981,6 +981,17 @@
             render();
         }
 
+        // 一次清除總名單／待排名單目前使用的所有篩選條件；不影響排序或玩家資料。
+        function clearAllPoolFilters() {
+            poolJobFilters = [];
+            poolTagFilter = "all";
+            masterGroupFilter = "all";
+            masterUnsetTimeOnly = false;
+            masterNameQuery = "";
+            poolDayFilter = -1;
+            render();
+        }
+
         function setPoolTagFilter(val) {
             poolTagFilter = val;
             render();
@@ -2111,6 +2122,10 @@
             let filterBarHtml = `
                 <div class="flex flex-col gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 mb-3">
                     <div class="flex flex-wrap items-center gap-1.5">
+                        <button onclick="clearAllPoolFilters()" class="self-start rounded-lg border border-rose-800 bg-rose-950/40 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-900/60">清除篩選</button>
+                        ${isMasterView ? `<button onclick="toggleMasterUnsetTimeOnly()" class="text-[11px] px-2.5 py-1 rounded transition border ${masterUnsetTimeOnly ? 'bg-amber-600 border-amber-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">未填時間${masterUnsetTimeOnly ? ' ✓' : ''}</button>` : ""}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
                         <span class="text-xs text-slate-400 mr-1 font-semibold">標籤篩選：</span>
                         <button onclick="setPoolTagFilter('all')" class="text-[11px] px-2.5 py-1 rounded transition border ${poolTagFilter === 'all' ? 'bg-blue-600 border-blue-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">全部</button>
                         ${SHARED_TAGS.map(tag => `
@@ -2129,7 +2144,6 @@
                                 return `<option value="${escapeHtml(groupId)}" ${masterGroupFilter === groupId ? "selected" : ""}>大小號 ${escapeHtml(number)}</option>`;
                             }).join("")}
                         </select>
-                        <button onclick="toggleMasterUnsetTimeOnly()" class="text-[11px] px-2.5 py-1 rounded transition border ${masterUnsetTimeOnly ? 'bg-amber-600 border-amber-500 text-white font-bold' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}">未填時間${masterUnsetTimeOnly ? ' ✓' : ''}</button>
                     </div>
                     ` : ""}
 
@@ -2145,7 +2159,6 @@
 
                     <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-900 pt-2">
                         <span class="text-xs text-slate-400 mr-1 font-semibold">職業篩選：</span>
-                        <button onclick="clearAllJobFilters()" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition mr-1">清除職業</button>
             `;
             JOB_LIST.forEach(j => {
                 const isChecked = poolJobFilters.includes(j);
